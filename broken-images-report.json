@@ -1,0 +1,7 @@
+{
+  "status": "Partial",
+  "header": {"status": "Fixed", "source": "i0.wp.com source logo", "fallback": "src/image/logo.png"},
+  "publicArticleAndHomepageImages": {"status": "Needs verification", "note": "Many external Unsplash/source images exist; browser network failures must be checked per route"},
+  "brokenImageRemoval": 0,
+  "fallbackPolicy": "No broken-image fallback CSS should substitute visible alt text; verified local fallback must remain stable"
+}

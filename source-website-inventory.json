@@ -1,0 +1,51 @@
+{
+  "auditedAt": "2026-11-21T23:48:24+05:30",
+  "source": "https://marathiudyojak.com/",
+  "robots": "https://marathiudyojak.com/robots.txt",
+  "sitemaps": [
+    "https://marathiudyojak.com/sitemap_index.xml",
+    "https://marathiudyojak.com/post-sitemap.xml",
+    "https://marathiudyojak.com/page-sitemap.xml",
+    "https://marathiudyojak.com/category-sitemap.xml"
+  ],
+  "home": {
+    "url": "https://marathiudyojak.com/",
+    "title": "Marathi Udyojak | प्रत्येक मराठी उद्योजकासाठी | मुखपृष्ठ",
+    "pageType": "homepage",
+    "contentStatus": "inspected",
+    "logo": "https://i0.wp.com/marathiudyojak.com/wp-content/uploads/2024/07/cropped-Logo.jpg?fit=512%2C512&ssl=1",
+    "brandText": "मराठी उद्योजक",
+    "latestTicker": "present",
+    "footerColumns": 4
+  },
+  "mainPages": [
+    {"url": "/privacy-policy/", "slug": "privacy-policy", "pageType": "static"},
+    {"url": "/links/", "slug": "links", "pageType": "static"},
+    {"url": "/archives/", "slug": "archives", "pageType": "archive"},
+    {"url": "/marathi-udyojak-t-shirt/", "slug": "marathi-udyojak-t-shirt", "pageType": "static"},
+    {"url": "/about-us-2/", "slug": "about-us-2", "pageType": "static"},
+    {"url": "/contact-us-2/", "slug": "contact-us-2", "pageType": "static"},
+    {"url": "/privacy-policy-2/", "slug": "privacy-policy-2", "pageType": "static"},
+    {"url": "/marathi-udyojak-whatsapp-group-telegram-group-facebook-group-udyojak-online/", "slug": "marathi-udyojak-whatsapp-group-telegram-group-facebook-group-udyojak-online", "pageType": "static"},
+    {"url": "/about-us/", "slug": "about-us", "pageType": "static"},
+    {"url": "/terms-and-conditions/", "slug": "terms-and-conditions", "pageType": "static"},
+    {"url": "/dmca-notice/", "slug": "dmca-notice", "pageType": "static"},
+    {"url": "/contact-us/", "slug": "contact-us", "pageType": "static"},
+    {"url": "/affiliate-disclosure-marathi-udyojak/", "slug": "affiliate-disclosure-marathi-udyojak", "pageType": "static"},
+    {"url": "/faq/", "slug": "faq", "pageType": "static"},
+    {"url": "/ads-on-marathi-udyojak-pages-website-and-social-media-accounts/", "slug": "ads-on-marathi-udyojak-pages-website-and-social-media-accounts", "pageType": "advertising"}
+  ],
+  "categoryCountInSitemap": 62,
+  "knownCategories": [
+    "entrepreneurship", "start-your-business", "business-motivation-startup-motivation",
+    "technology", "share-market", "farming-business", "startup-story",
+    "personality-development", "books", "quotes-suvichar", "e-commerce", "blogging"
+  ],
+  "postDiscovery": {
+    "sourceApi": "https://marathiudyojak.com/wp-json/wp/v2/posts",
+    "status": "paged REST inventory inspected",
+    "firstPublishedPost": "ankita-raut-beed-lux-beauty-parlour-success-story",
+    "knownPostCountPages": ["page=1", "page=2", "page=3"]
+  },
+  "status": "Source inventory partially automated; full article body comparison remains verification-needed."
+}

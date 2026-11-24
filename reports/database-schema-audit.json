@@ -1,0 +1,404 @@
+{
+  "generatedAt": "2026-11-21T19:17:01.839Z",
+  "databaseNameOmitted": true,
+  "collections": [
+    {
+      "model": "Article",
+      "collection": "articles",
+      "records": 269,
+      "fields": {
+        "title": "String",
+        "slug": "String",
+        "subtitle": "String",
+        "content": "String",
+        "excerpt": "String",
+        "author": "ObjectId",
+        "authorName": "String",
+        "category": "String",
+        "image": "String",
+        "featuredImage": "String",
+        "images": "Array",
+        "sourceUrl": "String",
+        "readingTime": "Number",
+        "seoTitle": "String",
+        "seoDescription": "String",
+        "canonicalUrl": "String",
+        "ogImage": "String",
+        "tags": "Array",
+        "keywords": "Array",
+        "publicationDate": "Date",
+        "isPublished": "Boolean",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "BusinessIdea",
+      "collection": "businessideas",
+      "records": 1,
+      "fields": {
+        "title": "String",
+        "slug": "String",
+        "description": "String",
+        "category": "ObjectId",
+        "investment": "Number",
+        "investmentLabel": "String",
+        "machinery": "Array",
+        "rawMaterials": "Array",
+        "licenses": "Array",
+        "process": "Array",
+        "marketing": "Array",
+        "images": "Array",
+        "seo.title": "String",
+        "seo.description": "String",
+        "seo.keywords": "Array",
+        "isPublished": "Boolean",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Category",
+      "collection": "categories",
+      "records": 73,
+      "fields": {
+        "name": "String",
+        "slug": "String",
+        "description": "String",
+        "icon": "String",
+        "isActive": "Boolean",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Business",
+      "collection": "businesses",
+      "records": 0,
+      "fields": {
+        "owner": "ObjectId",
+        "businessName": "String",
+        "ownerName": "String",
+        "category": "ObjectId",
+        "description": "String",
+        "address": "String",
+        "district": "String",
+        "city": "String",
+        "state": "String",
+        "mobile": "String",
+        "whatsapp": "String",
+        "email": "String",
+        "website": "String",
+        "logo": "String",
+        "images": "Array",
+        "listingType": "String",
+        "approvalStatus": "String",
+        "rejectionReason": "String",
+        "slug": "String",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "GovernmentScheme",
+      "collection": "governmentschemes",
+      "records": 0,
+      "fields": {
+        "name": "String",
+        "slug": "String",
+        "description": "String",
+        "eligibility": "Array",
+        "benefits": "Array",
+        "documents": "Array",
+        "applicationProcess": "Array",
+        "officialUrl": "String",
+        "isActive": "Boolean",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "SuccessStory",
+      "collection": "successstories",
+      "records": 0,
+      "fields": {
+        "title": "String",
+        "slug": "String",
+        "entrepreneurName": "String",
+        "businessName": "String",
+        "city": "String",
+        "summary": "String",
+        "story": "String",
+        "image": "String",
+        "isPublished": "Boolean",
+        "publicationDate": "Date",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Page",
+      "collection": "pages",
+      "records": 17,
+      "fields": {
+        "title": "String",
+        "slug": "String",
+        "subtitle": "String",
+        "content": "String",
+        "sections": "Mixed",
+        "pageType": "String",
+        "status": "String",
+        "headerTemplate": "String",
+        "footerTemplate": "String",
+        "sidebarTemplate": "String",
+        "excerpt": "String",
+        "featuredImage": "String",
+        "sourceUrl": "String",
+        "seoTitle": "String",
+        "seoDescription": "String",
+        "canonicalUrl": "String",
+        "isPublished": "Boolean",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "NavigationMenu",
+      "collection": "navigationmenus",
+      "records": 1,
+      "fields": {
+        "key": "String",
+        "label": "String",
+        "location": "String",
+        "items": "Array",
+        "isActive": "Boolean",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "User",
+      "collection": "users",
+      "records": 1,
+      "fields": {
+        "name": "String",
+        "email": "String",
+        "mobile": "String",
+        "password": "String",
+        "role": "String",
+        "isActive": "Boolean",
+        "avatar": "String",
+        "resetPasswordToken": "String",
+        "resetPasswordExpires": "Date",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Promotion",
+      "collection": "promotions",
+      "records": 0,
+      "fields": {
+        "user": "ObjectId",
+        "type": "String",
+        "title": "String",
+        "description": "String",
+        "amountPaise": "Number",
+        "status": "String",
+        "relatedBusiness": "ObjectId",
+        "payment": "ObjectId",
+        "startsAt": "Date",
+        "expiresAt": "Date",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Advertisement",
+      "collection": "advertisements",
+      "records": 0,
+      "fields": {
+        "title": "String",
+        "image": "String",
+        "targetUrl": "String",
+        "placement": "String",
+        "isActive": "Boolean",
+        "approvalStatus": "String",
+        "startAt": "Date",
+        "endAt": "Date",
+        "advertiserName": "String",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Payment",
+      "collection": "payments",
+      "records": 0,
+      "fields": {
+        "user": "ObjectId",
+        "razorpayOrderId": "String",
+        "razorpayPaymentId": "String",
+        "razorpaySignature": "String",
+        "packageType": "String",
+        "amountPaise": "Number",
+        "currency": "String",
+        "status": "String",
+        "relatedBusiness": "ObjectId",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Enquiry",
+      "collection": "enquiries",
+      "records": 0,
+      "fields": {
+        "business": "ObjectId",
+        "name": "String",
+        "mobile": "String",
+        "email": "String",
+        "message": "String",
+        "status": "String",
+        "ipAddress": "String",
+        "userAgent": "String",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Tag",
+      "collection": "tags",
+      "records": 459,
+      "fields": {
+        "name": "String",
+        "slug": "String",
+        "isActive": "Boolean",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Media",
+      "collection": "media",
+      "records": 6,
+      "fields": {
+        "title": "String",
+        "altText": "String",
+        "caption": "String",
+        "url": "String",
+        "mimeType": "String",
+        "size": "Number",
+        "width": "Number",
+        "height": "Number",
+        "usages": "Array",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "HomepageSection",
+      "collection": "homepagesections",
+      "records": 10,
+      "fields": {
+        "key": "String",
+        "title": "String",
+        "subtitle": "String",
+        "categorySlug": "String",
+        "limit": "Number",
+        "order": "Number",
+        "isActive": "Boolean",
+        "articleIds": "Array",
+        "desktopLayout": "String",
+        "mobileLayout": "String",
+        "viewAllLink": "String",
+        "background": "String",
+        "spacing": "String",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "GlobalContent",
+      "collection": "globalcontents",
+      "records": 0,
+      "fields": {
+        "key": "String",
+        "label": "String",
+        "value": "Mixed",
+        "type": "String",
+        "page": "String",
+        "component": "String",
+        "status": "String",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "Revision",
+      "collection": "revisions",
+      "records": 0,
+      "fields": {
+        "entityType": "String",
+        "entityId": "Mixed",
+        "action": "String",
+        "summary": "String",
+        "oldValue": "Mixed",
+        "newValue": "Mixed",
+        "editor": "ObjectId",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    },
+    {
+      "model": "WebsiteSettings",
+      "collection": "websitesettings",
+      "records": 1,
+      "fields": {
+        "key": "String",
+        "websiteName": "String",
+        "websiteUrl": "String",
+        "logo": "String",
+        "favicon": "String",
+        "tagline": "String",
+        "language": "String",
+        "timezone": "String",
+        "defaultEmail": "String",
+        "defaultPhone": "String",
+        "address": "String",
+        "maintenanceMode": "Boolean",
+        "contacts.generalEmail": "String",
+        "contacts.copyrightEmail": "String",
+        "contacts.businessEmail": "String",
+        "contacts.advertisingEmail": "String",
+        "contacts.supportEmail": "String",
+        "social.facebook": "String",
+        "social.instagram": "String",
+        "social.youtube": "String",
+        "social.whatsapp": "String",
+        "social.linkedin": "String",
+        "social.x": "String",
+        "social.telegram": "String",
+        "seo.title": "String",
+        "seo.description": "String",
+        "seo.canonicalUrl": "String",
+        "seo.ogImage": "String",
+        "seo.robots": "String",
+        "seo.structuredData": "Mixed",
+        "design.marathiFont": "String",
+        "design.headingFont": "String",
+        "design.bodyFont": "String",
+        "design.primaryColor": "String",
+        "design.accentColor": "String",
+        "design.backgroundColor": "String",
+        "design.containerWidth": "Number",
+        "headers": "Mixed",
+        "footers": "Mixed",
+        "defaultHeader": "String",
+        "defaultFooter": "String",
+        "createdAt": "Date",
+        "updatedAt": "Date"
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "status": "Database page count verified",
+  "sourceStaticPages": 15,
+  "localStaticRoutesPresent": [
+    "/about-us", "/contact-us", "/faq", "/privacy-policy",
+    "/privacy-policy-2", "/terms-and-conditions", "/dmca-notice",
+    "/affiliate-disclosure-marathi-udyojak",
+    "/marathi-udyojak-whatsapp-group-telegram-group-facebook-group-udyojak-online",
+    "/page/:slug"
+  ],
+  "missingRoutesNotClaimed": [],
+  "databaseVerified": {
+    "localPageCount": 17,
+    "knownSlugs": 17,
+    "sourceStaticCount": 15
+  },
+  "missingPagesCandidate": "Bulk source page-by-page content parity still needs article-level verification",
+  "rule": "No records will be deleted or overwritten during missing-page discovery"
+}

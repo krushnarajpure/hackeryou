@@ -1,0 +1,12 @@
+const express = require('express');
+const auth = require('../middleware/authMiddleware');
+const admin = require('../middleware/adminMiddleware');
+const upload = require('../middleware/uploadMiddleware');
+const controller = require('../controllers/advertisementController');
+const router = express.Router();
+router.get('/active', controller.getActiveAdvertisements);
+router.post('/', auth, admin, upload.single('image'), upload.validateImages, controller.createAdvertisement);
+router.put('/:id', auth, admin, upload.single('image'), upload.validateImages, controller.updateAdvertisement);
+router.patch('/:id/approve', auth, admin, controller.approveAdvertisement);
+router.delete('/:id', auth, admin, controller.deleteAdvertisement);
+module.exports = router;

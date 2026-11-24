@@ -1,0 +1,25 @@
+{
+  "auditedAt": "2026-11-21T23:48:24+05:30",
+  "status": "Partial - database inventory verified, full source body comparison not complete",
+  "localArticleCount": 268,
+  "localCategoryCount": 73,
+  "localPageCount": 17,
+  "sourcePostRestInventory": "Paged REST inventory inspected",
+  "verifiedArticleSample": [
+    "flipkart-success-story-marathi",
+    "vyapari-pension-yojana-2025-marathi",
+    "entrepreneurship-before-start-7-things",
+    "upi-payments-and-simple-bookkeeping"
+  ],
+  "duplicateRules": [
+    "Compare MongoDB _id",
+    "Compare normalized slug",
+    "Compare normalized title",
+    "Compare content hash",
+    "Preserve canonical record",
+    "Create backup before merge or removal"
+  ],
+  "exactDuplicatesRemoved": 0,
+  "incompleteArticlesModified": 0,
+  "remaining": "Compare all 268 local article bodies and images against eligible source records"
+}

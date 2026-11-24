@@ -1,0 +1,13 @@
+const express = require('express');
+const auth = require('../middleware/authMiddleware');
+const admin = require('../middleware/adminMiddleware');
+const upload = require('../middleware/uploadMiddleware');
+const controller = require('../controllers/businessIdeaController');
+const router = express.Router();
+router.get('/', controller.getIdeas);
+router.get('/:id', controller.getIdea);
+router.post('/submit', upload.array('images', 8), upload.validateImages, controller.submitIdea);
+router.post('/', auth, admin, upload.array('images', 8), upload.validateImages, controller.createIdea);
+router.put('/:id', auth, admin, upload.array('images', 8), upload.validateImages, controller.updateIdea);
+router.delete('/:id', auth, admin, controller.deleteIdea);
+module.exports = router;

@@ -1,0 +1,17 @@
+const express = require('express');
+const auth = require('../middleware/authMiddleware');
+const admin = require('../middleware/adminMiddleware');
+const { requirePermission } = require('../middleware/permissionMiddleware');
+const controller = require('../controllers/adminController');
+const router = express.Router();
+router.use(auth, admin);
+router.get('/dashboard', requirePermission('analytics:read'), controller.dashboard);
+router.get('/storage', requirePermission('settings:read'), controller.getStorage);
+router.get('/users', requirePermission('users:read'), controller.getUsers);
+router.put('/users/:id', requirePermission('users:write'), controller.updateUser);
+router.delete('/users/:id', requirePermission('users:write'), controller.deleteUser);
+router.put('/businesses/:id/status', requirePermission('businesses:write'), controller.approveOrRejectBusiness);
+router.get('/payments', requirePermission('payments:read'), controller.getPayments);
+router.get('/payments/:id', requirePermission('payments:read'), controller.getPayment);
+router.get('/audit', requirePermission('audit:read'), controller.getAuditLogs);
+module.exports = router;

@@ -1,0 +1,14 @@
+{
+  "auditedAt": "2026-11-21T23:48:24+05:30",
+  "comparisons": [
+    {"area": "Homepage header", "status": "Needs verification", "note": "Local header now uses source logo URL and local fallback; desktop/mobile spacing needs exact viewport screenshots"},
+    {"area": "Homepage navigation", "status": "Correct", "note": "Desktop dropdown and mobile menu implementations exist"},
+    {"area": "Latest ticker", "status": "Correct", "note": "Rendered in a separate row"},
+    {"area": "Footer", "status": "Needs verification", "note": "Mobile one-column rule added; full source/footer labels need page-specific CMS verification"},
+    {"area": "Article page", "status": "Needs verification", "note": "Header, breadcrumb, content, sidebar, related articles and footer exist; bulk content parity unavailable"},
+    {"area": "Category pages", "status": "Needs verification", "note": "Route exists and uses API pagination; source category parity needs full category seed/DB verification"},
+    {"area": "Static pages", "status": "Needs verification", "note": "Major routes exist, but database-backed content may be missing"},
+    {"area": "Admin dashboard", "status": "Partial", "note": "Core CMS settings/pages/articles/homepage/navigation/media/revisions are implemented; remaining modules need dedicated APIs/UI"},
+    {"area": "Mobile bottom navigation", "status": "Fixed", "note": "Removed from public rendering"}
+  ]
+}

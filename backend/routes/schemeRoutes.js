@@ -1,0 +1,11 @@
+const express = require('express');
+const auth = require('../middleware/authMiddleware');
+const admin = require('../middleware/adminMiddleware');
+const controller = require('../controllers/schemeController');
+const router = express.Router();
+router.get('/', controller.getSchemes);
+router.get('/:id', controller.getScheme);
+router.post('/', auth, admin, controller.createScheme);
+router.put('/:id', auth, admin, controller.updateScheme);
+router.delete('/:id', auth, admin, controller.deleteScheme);
+module.exports = router;

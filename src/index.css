@@ -1,0 +1,78 @@
+@import url("https://fonts.googleapis.com/css?family=Poppins%7CPoppins:600,regular%7CPoppins%7CPoppins&subset=latin,latin,latin,latin&display=swap");
+@import "tailwindcss";
+
+:root {
+  --green-dark: #064e2b;
+  --green: #137a3d;
+  --orange: #f47721;
+  --cream: #f7f8f5;
+  --ink: #17201a;
+  --muted: #687268;
+  --line: #dde5df;
+  --font-system: "Poppins", sans-serif;
+  --font-body: "Poppins", sans-serif;
+  --font-heading: "Poppins", sans-serif;
+  --font-navigation: "Poppins", sans-serif;
+  --font-article: "Poppins", sans-serif;
+  font-family: "Poppins", sans-serif;
+  color: var(--ink);
+  background: var(--cream);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input, textarea, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; display: block; }
+
+body,
+input,
+button,
+textarea,
+select {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 21px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.brand,
+.reference-article-header h1,
+.reference-article-section h2,
+.reference-rich-content h2,
+.source-article-card h3 {
+  font-family: "Mukta", "Noto Sans Devanagari", sans-serif;
+}
+
+h1 {
+  font-size: 41px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 27px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 23px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+p {
+  margin: 0 0 18px;
+  line-height: 1.8;
+}

@@ -1,0 +1,8 @@
+{
+  "status": "Not verified",
+  "method": "Exact duplicate detection must compare normalized title, slug, content hash and MongoDB _id",
+  "recordsRemoved": 0,
+  "recordsMerged": 0,
+  "risk": "Similar titles are not duplicates unless content and IDs are verified",
+  "nextSteps": ["Fetch article records", "Compare exact normalized content", "Create backup", "Preserve canonical record"]
+}

@@ -1,0 +1,2175 @@
+import { useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import {
+  ArrowRight, ArrowUp, BadgeIndianRupee, Building2, CalendarDays, ChevronRight, CircleUserRound, Landmark, Laptop,
+  MessageCircle, HeartHandshake, Home, Leaf, Lightbulb, Mail, MapPin, Menu, Phone, Rocket, Search, Sprout, Store,
+  TrendingUp, Users, Wrench, X
+} from 'lucide-react'
+import NewsTicker from './components/NewsTicker'
+import { ArticleHeader } from './components/ArticleHeader'
+import ArticleDetailLayout from './components/ArticleDetailLayout'
+import PopularPostsSidebar from './components/PopularPostsSidebar'
+import DOMPurify from 'dompurify'
+import logoUrl from './image/fallback-logo.svg'
+import './App.css'
+
+function mapBusinessIdea(idea) {
+  return {
+    id: idea.slug || idea._id,
+    title: idea.title,
+    category: idea.category?.name || 'व्यवसाय',
+    investment: idea.investmentLabel || `₹${Number(idea.investment || 0).toLocaleString('mr-IN')}+`,
+    investmentValue: Number(idea.investment || 0),
+    profit: '30-40%',
+    image: idea.images?.[0] || '',
+    location: 'महाराष्ट्र',
+    description: idea.description,
+    machinery: idea.machinery,
+    rawMaterials: idea.rawMaterials,
+    licenses: idea.licenses,
+    process: idea.process,
+    marketing: idea.marketing
+  }
+}
+
+function useLiveIdeas() {
+  const [state, setState] = useState({ status: 'loading', ideas: [], error: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/business-ideas?limit=50', { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('API unavailable')
+        return response.json()
+      })
+      .then((data) => {
+        if (!Array.isArray(data.ideas) || data.ideas.length === 0) {
+          setState({ status: 'empty', ideas: [], error: null })
+          return
+        }
+        setState({ status: 'success', error: null, ideas: data.ideas.map(mapBusinessIdea) })
+      })
+      .catch((error) => {
+        if (error.name === 'AbortError') return
+        setState({ status: 'error', ideas: [], error: 'Live data उपलब्ध नाही. कृपया नंतर पुन्हा प्रयत्न करा.' })
+      })
+    return () => controller.abort()
+  }, [])
+  return state
+}
+
+function mapArticleRecord(article) {
+  return {
+    id: article.slug || article._id,
+    title: article.title,
+    tag: article.category || 'लेख',
+    date: article.publicationDate ? new Date(article.publicationDate).toLocaleDateString('mr-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'अलीकडील',
+    publicationDate: article.publicationDate,
+    image: article.featuredImage || article.ogImage || article.image || logoUrl,
+    excerpt: article.excerpt || article.subtitle || '',
+    subtitle: article.subtitle || '',
+    content: article.content,
+    authorName: article.authorName || article.author?.name || 'Marathi Udyojak',
+    readingTime: article.readingTime,
+    seoTitle: article.seoTitle,
+    seoDescription: article.seoDescription,
+    canonicalUrl: article.canonicalUrl,
+    ogImage: article.ogImage,
+    tags: article.tags,
+    keywords: article.keywords,
+    commentCount: Array.isArray(article.comments) ? article.comments.length : article.commentCount
+  }
+}
+
+async function requestJson(path, signal) {
+  const response = await fetch(path, { signal })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`)
+  return data
+}
+
+async function searchArticleTitleSuggestions(prefix, signal) {
+  const encodedPrefix = encodeURIComponent(prefix)
+  const firstPage = await requestJson(`/api/articles/suggestions?prefix=${encodedPrefix}&page=1&limit=50`, signal)
+  const pages = firstPage.matchMode === 'title-prefix' ? firstPage.pagination?.pages || 1 : 1
+  const remainingPages = await Promise.all(Array.from({ length: Math.max(pages - 1, 0) }, (_, index) => (
+    requestJson(`/api/articles/suggestions?prefix=${encodedPrefix}&page=${index + 2}&limit=50`, signal)
+  )))
+  const results = [firstPage, ...remainingPages].flatMap((data) => data.articles || []).map((article) => {
+    const item = mapArticleRecord(article)
+    return {
+      id: item.id,
+      title: item.title,
+      image: item.image,
+      date: item.date,
+      category: item.tag,
+      kind: 'लेख',
+      to: `/articles/${item.id}`
+    }
+  })
+  return { results, matchMode: firstPage.matchMode || 'title-prefix' }
+}
+
+async function searchWebsite(query, signal) {
+  const encodedQuery = encodeURIComponent(query.trim())
+  const requests = [
+    requestJson(`/api/articles?search=${encodedQuery}&limit=6`, signal).then((data) => (data.articles || []).map((article) => {
+      const item = mapArticleRecord(article)
+      return {
+        id: item.id,
+        title: item.title,
+        image: item.image,
+        excerpt: plainTextExcerpt(item.excerpt || item.subtitle || item.content || ''),
+        date: item.date,
+        category: item.tag,
+        kind: 'लेख',
+        to: `/articles/${item.id}`
+      }
+    })),
+    requestJson(`/api/business-ideas?search=${encodedQuery}&limit=6`, signal).then((data) => (data.ideas || []).map((idea) => ({
+      id: idea.slug || idea._id,
+      title: idea.title,
+      image: idea.images?.[0] || logoUrl,
+      excerpt: plainTextExcerpt(idea.description || ''),
+      date: idea.createdAt ? new Date(idea.createdAt).toLocaleDateString('mr-IN') : 'अलीकडील',
+      category: idea.category?.name || 'व्यवसाय कल्पना',
+      kind: 'व्यवसाय कल्पना',
+      to: `/business-ideas/${idea.slug || idea._id}`
+    }))),
+    requestJson(`/api/schemes?search=${encodedQuery}`, signal).then((data) => (data.schemes || []).slice(0, 6).map((scheme) => ({
+      id: scheme.slug || scheme._id,
+      title: scheme.name,
+      image: logoUrl,
+      excerpt: plainTextExcerpt(scheme.description || ''),
+      date: scheme.createdAt ? new Date(scheme.createdAt).toLocaleDateString('mr-IN') : 'अलीकडील',
+      category: 'सरकारी योजना',
+      kind: 'सरकारी योजना',
+      to: `/schemes/${scheme.slug || scheme._id}`
+    })))
+  ]
+  const settled = await Promise.allSettled(requests)
+  if (signal?.aborted) {
+    const error = new Error('Search aborted')
+    error.name = 'AbortError'
+    throw error
+  }
+  const results = []
+  const errors = []
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') results.push(...result.value)
+    else errors.push(`${['लेख', 'व्यवसाय कल्पना', 'सरकारी योजना'][index]}: ${result.reason.message}`)
+  })
+  if (errors.length === settled.length) throw new Error(errors[0] || 'शोध उपलब्ध नाही.')
+  const seen = new Set()
+  const uniqueResults = results.filter((result) => {
+    const key = `${result.kind}:${result.id || result.title}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  return { results: uniqueResults, errors }
+}
+
+function useLiveItem(path, property) {
+  const [state, setState] = useState({ path, status: 'loading', item: null, error: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    setState({ path, status: 'loading', item: null, error: null })
+    fetch(path, { signal: controller.signal })
+      .then(async (response) => {
+        if (response.status === 404) return { status: 'not-found' }
+        if (!response.ok) throw new Error('API unavailable')
+        const data = await response.json()
+        return data[property] ? { status: 'success', item: data[property] } : { status: 'not-found' }
+      })
+      .then((result) => {
+        if (!controller.signal.aborted) setState({ ...result, path, item: result.item || null, error: null })
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') setState({ path, status: 'error', item: null, error: 'माहिती लोड करता आली नाही. कृपया पुन्हा प्रयत्न करा.' })
+      })
+    return () => controller.abort()
+  }, [path, property])
+  return state.path === path ? state : { path, status: 'loading', item: null, error: null }
+}
+
+function useLiveArticles() {
+  const [state, setState] = useState({ status: 'loading', articles: [], error: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/articles?limit=50', { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('API unavailable')
+        return response.json()
+      })
+      .then((data) => {
+        if (!Array.isArray(data.articles) || data.articles.length === 0) {
+          setState({ status: 'empty', articles: [], error: null })
+          return
+        }
+        setState({
+          status: 'success',
+          error: null,
+          articles: data.articles.map(mapArticleRecord)
+        })
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') setState({ status: 'error', articles: [], error: 'Live articles उपलब्ध नाहीत. कृपया नंतर पुन्हा प्रयत्न करा.' })
+      })
+    return () => controller.abort()
+  }, [])
+  return state
+}
+
+const HOMEPAGE_CATEGORIES = [
+  { title: 'उद्योजकता', slug: 'entrepreneurship', Icon: Rocket, color: 'blue' },
+  { title: 'सरकारी योजना', slug: 'sarkari-yojana', Icon: Landmark, color: 'green' },
+  { title: 'तंत्रज्ञान', slug: 'technology', Icon: Laptop, color: 'orange' },
+  { title: 'शेती उद्योग', slug: 'farming-business', Icon: Sprout, color: 'green' }
+]
+
+function useHomepageCategorySections() {
+  const [sections, setSections] = useState(HOMEPAGE_CATEGORIES.map((category) => ({
+    ...category,
+    status: 'loading',
+    articles: [],
+    error: ''
+  })))
+
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.allSettled(HOMEPAGE_CATEGORIES.map(async (category) => {
+      const data = await requestJson(`/api/articles?category=${encodeURIComponent(category.slug)}&page=1&limit=3`, controller.signal)
+      return Array.isArray(data.articles) ? data.articles : []
+    })).then((results) => {
+      if (controller.signal.aborted) return
+      const seenIds = new Set()
+      const seenTitles = new Set()
+      setSections(results.map((result, index) => {
+        const category = HOMEPAGE_CATEGORIES[index]
+        if (result.status === 'rejected') {
+          if (result.reason?.name !== 'AbortError') console.error(`${category.title} homepage articles could not be loaded:`, result.reason)
+          return { ...category, status: 'error', articles: [], error: 'लेख लोड करता आले नाहीत.' }
+        }
+        const articles = result.value.filter((article) => {
+          const id = String(article.slug || article._id || '')
+          const title = String(article.title || '').trim().toLocaleLowerCase()
+          if ((id && seenIds.has(id)) || (title && seenTitles.has(title))) return false
+          if (id) seenIds.add(id)
+          if (title) seenTitles.add(title)
+          return true
+        })
+        return { ...category, status: articles.length ? 'success' : 'empty', articles, error: '' }
+      }))
+    })
+    return () => controller.abort()
+  }, [])
+
+  return sections
+}
+
+function useLiveCategories() {
+  const [categories, setCategories] = useState([])
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/categories', { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('API unavailable')))
+      .then((data) => setCategories(Array.isArray(data.categories) ? data.categories : []))
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setCategories([])
+          console.error('Business categories could not be loaded:', error)
+        }
+      })
+    return () => controller.abort()
+  }, [])
+  return categories
+}
+
+function mapBusinessRecord(business) {
+  return {
+    id: business.slug || business._id,
+    name: business.businessName,
+    ownerName: business.ownerName || business.owner?.name || '',
+    category: business.category?.name || 'व्यवसाय',
+    city: business.city,
+    district: business.district,
+    address: business.address,
+    phone: business.mobile,
+    email: business.email,
+    website: business.website,
+    description: business.description,
+    premium: business.listingType !== 'free',
+    image: business.logo || business.images?.[0] || ''
+  }
+}
+
+function useLiveBusinesses() {
+  const [state, setState] = useState({ status: 'loading', businesses: [], error: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/businesses?limit=50', { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('API unavailable')))
+      .then((data) => {
+        const businesses = Array.isArray(data.businesses) ? data.businesses.map(mapBusinessRecord) : []
+        setState({ status: businesses.length ? 'success' : 'empty', businesses, error: null })
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') setState({ status: 'error', businesses: [], error: 'Business Directory लोड करता आली नाही.' })
+      })
+    return () => controller.abort()
+  }, [])
+  return state
+}
+
+function mapSchemeRecord(scheme) {
+  return {
+    id: scheme.slug || scheme._id,
+    title: scheme.name,
+    description: scheme.description,
+    agency: 'सरकारी योजना',
+    amount: 'अधिकृत माहिती तपासा',
+    tag: 'Government Scheme',
+    eligibility: scheme.eligibility,
+    benefits: scheme.benefits,
+    documents: scheme.documents,
+    process: scheme.applicationProcess,
+    officialUrl: scheme.officialUrl,
+  }
+}
+
+function useLiveSchemes() {
+  const [state, setState] = useState({ status: 'loading', schemes: [], error: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/schemes?limit=50', { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('API unavailable')))
+      .then((data) => {
+        if (Array.isArray(data.schemes) && data.schemes.length) {
+          setState({
+            status: 'success',
+            error: null,
+            schemes: data.schemes.map(mapSchemeRecord),
+          })
+        } else setState({ status: 'empty', schemes: [], error: null })
+      })
+      .catch((error) => {
+          if (error.name !== 'AbortError') setState({ status: 'error', schemes: [], error: 'Live scheme data उपलब्ध नाही.' })
+      })
+    return () => controller.abort()
+  }, [])
+  return state
+}
+
+function useLiveStories(page = 1) {
+  const [state, setState] = useState({ status: 'loading', stories: [], pagination: null, error: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(`/api/stories?page=${page}&limit=12`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('API unavailable')))
+      .then((data) => {
+        const stories = Array.isArray(data.stories) ? data.stories : []
+        setState({
+          status: stories.length ? 'success' : 'empty',
+          stories,
+          pagination: data.pagination || null,
+          error: null
+        })
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') setState({ status: 'error', stories: [], pagination: null, error: 'Success Stories लोड करता आल्या नाहीत.' })
+      })
+    return () => controller.abort()
+  }, [page])
+  return state
+}
+
+function useLiveNavigation() {
+  const followLinks = [
+    { label: 'Facebook', to: 'https://www.facebook.com/marathiudyojakcom' },
+    { label: 'X', to: 'https://x.com/MUdyojak' },
+    { label: 'YouTube', to: 'https://www.youtube.com/@marathiudyojak_com' },
+    { label: 'Instagram', to: 'https://www.instagram.com/marathiudyojak_com/' },
+    { label: 'WhatsApp', to: 'https://wa.me/8169758384?text=%E0%A4%A8%E0%A4%AE%E0%A4%B8%E0%A5%8D%E0%A4%95%E0%A4%BE%E0%A4%B0%20%E0%A4%AE%E0%A5%80%20%E0%A4%B6%E0%A5%87%E0%A4%A4%E0%A4%95%E0%A4%B0%E0%A5%80%20!!!' }
+  ]
+  const fallback = [
+    { label: 'Home', to: '/', children: [] },
+    { label: 'उद्योजकता', to: '/category/entrepreneurship' },
+    { label: 'उद्योग मोटिवेशन', to: '/category/business-motivation-startup-motivation', children: [
+      { label: 'स्वतःची डेव्हलोपमेंट', to: '/category/personality-development' },
+      { label: 'पुस्तक सारांश', to: '/category/books' },
+      { label: 'सुविचार', to: '/category/quotes-suvichar' },
+      { label: 'पर्सनल वेल्थ', to: '/category/personal-wealth' }
+    ] },
+    { label: 'तंत्रज्ञान', to: '/category/technology', children: [
+      { label: 'ई-कॉमर्स', to: '/category/e-commerce' },
+      { label: 'ब्लॉगिंग', to: '/category/blogging' }
+    ] },
+    { label: 'शेअर मार्केट', to: '/category/share-market' },
+    { label: 'शेती उद्योग', to: '/category/farming-business' },
+    { label: 'स्टार्टअप Story', to: '/category/startup-story' },
+    { label: 'Follow', to: '/contact', children: followLinks },
+    { label: 'Search', to: '/search', children: [] }
+  ]
+  const [items, setItems] = useState(fallback)
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/navigation?location=header', { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('API unavailable')))
+      .then((data) => {
+        const menu = data.menus?.[0]
+        if (menu?.items?.length) setItems(menu.items.sort((a, b) => (a.order || 0) - (b.order || 0)))
+      })
+      .catch((error) => { if (error.name !== 'AbortError') setItems(fallback) })
+    return () => controller.abort()
+  }, [])
+  return items
+}
+
+function PageDetails() {
+  const { slug: paramSlug } = useParams()
+  const location = useLocation()
+  const slug = paramSlug || location.pathname.split('/').filter(Boolean).pop()
+  const [state, setState] = useState({ status: 'loading', page: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(`/api/pages/${encodeURIComponent(slug)}`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Page unavailable')))
+      .then((data) => setState({ status: 'success', page: data.page }))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setState({ status: 'error', page: null })
+      })
+    return () => controller.abort()
+  }, [slug])
+  if (state.status === 'loading') return <><PageHeader title="पान लोड होत आहे" crumb={slug}/><div className="data-loading">माहिती लोड होत आहे…</div></>
+  if (state.status === 'error' || !state.page) return <><PageHeader title="पान सापडले नाही" crumb={slug}/><section className="section"><div className="container empty-state"><h2>Requested page उपलब्ध नाही</h2><Link to="/">मुख्यपृष्ठावर जा</Link></div></section></>
+  return <>
+    <ArticleDetailLayout
+      header={<ArticleHeader
+        title={state.page.title}
+        category="Marathi Udyojak"
+        subtitle={state.page.subtitle || state.page.excerpt}
+        date={state.page.updatedAt ? new Date(state.page.updatedAt).toLocaleDateString('mr-IN') : 'संपादित पान'}
+        breadcrumbParent="Pages"
+        breadcrumbParentLink="/all-posts"
+      />}
+      image={state.page.featuredImage}
+      imageAlt={state.page.title}
+    >
+      <div className="reference-rich-content" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(state.page.content) }}/>
+    </ArticleDetailLayout>
+  </>
+}
+
+function Header() {
+  const [open, setOpen] = useState(false)
+  const [mobileExpanded, setMobileExpanded] = useState('')
+  const [desktopExpanded, setDesktopExpanded] = useState('')
+  const location = useLocation()
+  const isHomePage = location.pathname === '/'
+  const isCategoryArchivePage = /^\/category\/[^/]+\/?$/.test(location.pathname)
+  const navItems = useLiveNavigation()
+  const primaryNavItems = navItems.filter((item) => item.label !== 'Search')
+  useEffect(() => { setOpen(false); setDesktopExpanded(''); window.scrollTo(0, 0) }, [location.pathname])
+  return (
+    <>
+      <header className="site-header public-home-header">
+        <div className="header-main container">
+          <Link className="brand" to="/" aria-label="Marathi Udyojak home">
+            <img
+              className="source-logo"
+              src="https://marathiudyojak.com/wp-content/uploads/2024/11/marathi-udyojak-Logo-3.png"
+              alt="Marathi Udyojak"
+              onError={(event) => {
+                if (event.currentTarget.dataset.fallback !== 'true') {
+                  event.currentTarget.dataset.fallback = 'true'
+                  event.currentTarget.src = logoUrl
+                }
+              }}
+            />
+            <span className="source-logo-text"><strong>मराठी<span> उद्योजक</span></strong></span>
+          </Link>
+          <nav className="desktop-nav" aria-label="मुख्य नेव्हिगेशन">
+            {primaryNavItems.map((item) => item.children?.length ? (
+              <div className="desktop-nav-dropdown" key={item.to || item.label}>
+                <NavLink to={item.to}>{item.label}</NavLink>
+                <button
+                  type="button"
+                  className="dropdown-toggle"
+                  aria-label={`${item.label} उपमेनू`}
+                  aria-expanded={desktopExpanded === item.to}
+                  aria-controls={`menu-${item.to.replace(/[^a-z0-9]/gi, '-')}`}
+                  onClick={() => setDesktopExpanded((current) => current === item.to ? '' : item.to)}
+                ><ChevronRight className="dropdown-chevron" size={12}/></button>
+                <div id={`menu-${item.to.replace(/[^a-z0-9]/gi, '-')}`} className={`desktop-dropdown-menu${desktopExpanded === item.to ? ' is-open' : ''}`}>
+                  {item.children.map((child) => <SiteMenuLink key={child.to} to={child.to}>{child.label}<ChevronRight size={14}/></SiteMenuLink>)}
+                </div>
+              </div>
+            ) : <NavLink key={item.to} to={item.to} end={item.to === '/'}>{item.label}</NavLink>)}
+          </nav>
+          <div className="header-actions">
+            <Link className="header-search" to="/search" aria-label="Search"><Search size={20} /></Link>
+            {isHomePage && <Link className="home-login" to="/auth" aria-label="लॉगिन"><CircleUserRound size={16} /><span>लॉगिन</span></Link>}
+            <button className="menu-button" onClick={() => setOpen(true)} aria-label="मेनू उघडा"><Menu /></button>
+          </div>
+        </div>
+      </header>
+      <NewsTicker label={isCategoryArchivePage || isHomePage ? 'नवीन पोस्ट्स' : undefined} />
+      {open && (
+        <div className="menu-overlay" role="dialog" aria-modal="true">
+          <div className="mobile-menu">
+            <div className="mobile-menu-head"><span>मेनू</span><button onClick={() => setOpen(false)} aria-label="मेनू बंद करा"><X /></button></div>
+            {navItems.map((item) => item.children?.length ? (
+              <div className="mobile-nav-group" key={item.to}>
+                <button type="button" onClick={() => setMobileExpanded(mobileExpanded === item.to ? '' : item.to)}>{item.label}<ChevronRight className={mobileExpanded === item.to ? 'expanded' : ''} size={16}/></button>
+                {mobileExpanded === item.to && <div className="mobile-nav-children">{item.children.map((child) => <SiteMenuLink key={child.to} to={child.to}>{child.label}<ChevronRight size={14}/></SiteMenuLink>)}</div>}
+              </div>
+            ) : <Link key={item.to} to={item.to}>{item.label}<ChevronRight size={18}/></Link>)}
+            <Link to="/stories">यशोगाथा <ChevronRight size={18} /></Link>
+            <Link to="/articles">लेख <ChevronRight size={18} /></Link>
+            <Link to="/about">आमच्याबद्दल <ChevronRight size={18} /></Link>
+            <Link to="/contact">संपर्क <ChevronRight size={18} /></Link>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function Footer() {
+  const [footerData, setFooterData] = useState({ articles: [], tags: [], settings: {}, menus: [] })
+  useEffect(() => {
+    const controller = new AbortController()
+    const requests = [
+      requestJson('/api/articles/latest?limit=50', controller.signal),
+      requestJson('/api/tags', controller.signal),
+      requestJson('/api/cms/public/settings', controller.signal),
+      requestJson('/api/navigation?location=footer', controller.signal)
+    ]
+    Promise.allSettled(requests).then((results) => {
+      if (controller.signal.aborted) return
+      const read = (index, key) => {
+        const result = results[index]
+        if (result.status === 'fulfilled') return result.value[key]
+        if (result.reason?.name !== 'AbortError') console.error(`Footer data request failed (${key}):`, result.reason)
+        return []
+      }
+      const settingsResult = results[2]
+      if (settingsResult.status === 'rejected' && settingsResult.reason?.name !== 'AbortError') {
+        console.error('Footer settings could not be loaded:', settingsResult.reason)
+      }
+      setFooterData({
+        articles: read(0, 'articles') || [],
+        tags: read(1, 'tags') || [],
+        settings: settingsResult.status === 'fulfilled' ? settingsResult.value.settings || {} : {},
+        menus: read(3, 'menus') || []
+      })
+    })
+    return () => controller.abort()
+  }, [])
+
+  const availableTags = footerData.tags.length
+    ? footerData.tags
+    : Array.from(new Map(footerData.articles.flatMap((article) => article.tags || [])
+      .filter((name) => typeof name === 'string' && name.trim())
+      .map((name) => [name.trim().toLocaleLowerCase(), { name: name.trim() }])).values())
+  const managedLinks = footerData.menus
+    .flatMap((menu) => Array.isArray(menu.items) ? menu.items : [])
+    .filter((item) => item?.label && item?.to)
+  const defaultSecondColumn = [
+    { label: 'All Posts', to: '/all-posts' },
+    { label: 'About Us', to: '/about-us' },
+    { label: 'Ad on MarathiUdyojak', to: '/page/ads-on-marathi-udyojak-pages-website-and-social-media-accounts' },
+    { label: 'Contact Us', to: '/contact-us' },
+    { label: 'Privacy Policy', to: '/privacy-policy' },
+    { label: 'Affiliate Disclosure', to: '/affiliate-disclosure-marathi-udyojak' },
+    { label: 'FAQs', to: '/faq' },
+    { label: 'WhatsApp / Telegram', to: '/marathi-udyojak-whatsapp-group-telegram-group-facebook-group-udyojak-online' }
+  ]
+  const defaultThirdColumn = [
+    { label: 'All Posts', to: '/all-posts' },
+    { label: 'उद्योजकता', to: '/category/entrepreneurship' },
+    { label: 'उद्योग कल्पना', to: '/category/start-your-business' },
+    { label: 'सरकारी योजना', to: '/category/sarkari-yojana' },
+    { label: 'Startup Story', to: '/category/startup-story' },
+    { label: 'शेती उद्योग', to: '/category/farming-business' },
+    { label: 'तंत्रज्ञान', to: '/category/technology' }
+  ]
+  const secondColumnLinks = managedLinks.length
+    ? managedLinks.slice(0, Math.ceil(managedLinks.length / 2))
+    : defaultSecondColumn
+  const thirdColumnLinks = managedLinks.length
+    ? managedLinks.slice(Math.ceil(managedLinks.length / 2))
+    : defaultThirdColumn
+  const socialSettings = footerData.settings.social || {}
+  const socialLinks = [
+    { key: 'youtube', label: 'YouTube', href: socialSettings.youtube || 'https://www.youtube.com/@marathiudyojak_com', text: 'YT' },
+    { key: 'instagram', label: 'Instagram', href: socialSettings.instagram || 'https://www.instagram.com/marathiudyojak_com/', text: 'IG' },
+    { key: 'facebook', label: 'Facebook', href: socialSettings.facebook || 'https://www.facebook.com/marathiudyojakcom', text: 'f' },
+    { key: 'x', label: 'X', href: socialSettings.x || 'https://x.com/MUdyojak', text: 'X' },
+    { key: 'linkedin', label: 'LinkedIn', href: socialSettings.linkedin, text: 'in' },
+    { key: 'whatsapp', label: 'WhatsApp', href: socialSettings.whatsapp || 'https://wa.me/8169758384', Icon: MessageCircle }
+  ].filter((item) => item.href)
+  const primaryLinks = [
+    { label: 'All Posts', to: '/all-posts' },
+    { label: 'About Us', to: '/about-us' },
+    { label: 'Ad on MarathiUdyojak', to: '/page/ads-on-marathi-udyojak-pages-website-and-social-media-accounts' },
+    { label: 'Contact Us', to: '/contact-us' },
+    { label: 'Privacy Policy', to: '/privacy-policy' },
+    { label: 'Affiliate Disclosure', to: '/affiliate-disclosure-marathi-udyojak' },
+    { label: 'DMCA Notice', to: '/dmca-notice' },
+    { label: 'Terms & Conditions', to: '/terms-and-conditions' },
+    { label: 'FAQs', to: '/faq' }
+  ]
+  const recentArticles = footerData.articles.slice(0, 2).map(mapArticleRecord)
+  const footerLinkList = (links) => links.map((item, index) => (
+    <SiteMenuLink key={`${item.to}-${item.label}-${index}`} to={item.to}>{item.label}</SiteMenuLink>
+  ))
+
+  return (
+    <footer className="footer">
+      <div className="container footer-grid">
+        <div className="footer-column footer-important">
+          <h3>Important Links</h3>
+          {footerLinkList(primaryLinks)}
+          <h3 className="footer-check-heading">Check Also</h3>
+          <div className="footer-check-list">
+            {recentArticles.map((article) => (
+              <Link className="footer-check-card" to={`/articles/${article.id}`} key={article.id || article.title}>
+                <img src={article.image} alt="" loading="lazy" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = logoUrl }} />
+                <span><strong>{article.title}</strong><small>{article.date}</small></span>
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="footer-column">
+          <h3>Important Links</h3>
+          {footerLinkList(secondColumnLinks)}
+        </div>
+        <div className="footer-column">
+          <h3>Important Links</h3>
+          {footerLinkList(thirdColumnLinks)}
+        </div>
+        <div className="footer-column footer-tags">
+          <h3>TAGS</h3>
+          <div>
+            {availableTags.slice(0, 10).map((tag, index) => {
+              const name = typeof tag === 'string' ? tag : tag.name
+              const search = encodeURIComponent(name || '')
+              return name ? <Link key={tag._id || tag.slug || `${name}-${index}`} to={`/search?search=${search}`}>{name}</Link> : null
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="footer-bottom container">
+        <span>© {new Date().getFullYear()} MarathiUdyojak.com · All Rights Reserved. · KMedia</span>
+        <nav aria-label="Footer navigation"><Link to="/privacy-policy">Privacy Policy</Link><Link to="/terms-and-conditions">Terms</Link><Link to="/contact-us">Contact</Link></nav>
+        <div className="footer-socials" aria-label="Social media">
+          {socialLinks.map(({ key, label, href, Icon, text }) => (
+            <a key={key} href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>{Icon ? <Icon size={16} aria-hidden="true" /> : <span>{text}</span>}</a>
+          ))}
+        </div>
+        <button type="button" className="footer-back-top" aria-label="Back to top" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={17} /></button>
+      </div>
+    </footer>
+  )
+}
+
+function MobileNav() {
+  return (
+    <nav className="mobile-bottom" aria-label="मोबाइल नेव्हिगेशन">
+      <NavLink to="/" end><Home size={20} /><span>मुख्यपृष्ठ</span></NavLink>
+      <NavLink to="/business-ideas"><Search size={20} /><span>कल्पना</span></NavLink>
+      <NavLink className="bottom-add" to="/add-business"><span><Building2 size={22} /></span><span>व्यवसाय जोडा</span></NavLink>
+      <NavLink to="/directory"><Store size={20} /><span>डिरेक्टरी</span></NavLink>
+      <NavLink to="/auth"><CircleUserRound size={20} /><span>प्रोफाइल</span></NavLink>
+    </nav>
+  )
+}
+
+function SectionTitle({ eyebrow, title, link, to = '#' }) {
+  return <div className="section-title"><div>{eyebrow && <span>{eyebrow}</span>}<h2>{title}</h2></div>{link && <Link to={to}>{link}<ArrowRight size={16} /></Link>}</div>
+}
+
+function SiteMenuLink({ to, children, ...props }) {
+  if (/^https?:\/\//i.test(to || '')) {
+    return <a href={to} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
+  }
+  return <Link to={to} {...props}>{children}</Link>
+}
+
+function SiteSocialLinks({ className = '' }) {
+  return (
+    <div className={`category-social-links ${className}`.trim()} aria-label="Social media">
+      <SiteMenuLink to="https://www.facebook.com/marathiudyojakcom" className="archive-social-facebook" aria-label="Facebook">f</SiteMenuLink>
+      <SiteMenuLink to="https://x.com/MUdyojak" className="archive-social-x" aria-label="X">X</SiteMenuLink>
+      <SiteMenuLink to="https://www.youtube.com/@marathiudyojak_com" className="archive-social-youtube" aria-label="YouTube">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="4" /><path d="m10 9 5 3-5 3z" /></svg>
+      </SiteMenuLink>
+      <SiteMenuLink to="https://www.instagram.com/marathiudyojak_com/" className="archive-social-instagram" aria-label="Instagram">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" /><circle cx="12" cy="12" r="3.5" /><circle className="social-dot" cx="17.5" cy="6.8" r="1" /></svg>
+      </SiteMenuLink>
+      <SiteMenuLink to="https://wa.me/8169758384?text=%E0%A4%A8%E0%A4%AE%E0%A4%B8%E0%A5%8D%E0%A4%95%E0%A4%BE%E0%A4%B0%20%E0%A4%AE%E0%A5%80%20%E0%A4%B6%E0%A5%87%E0%A4%A4%E0%A4%95%E0%A4%B0%E0%A5%80%20!!!" className="archive-social-whatsapp" aria-label="WhatsApp">
+        <MessageCircle size={15} aria-hidden="true" /><Phone size={8} aria-hidden="true" />
+      </SiteMenuLink>
+    </div>
+  )
+}
+
+function HomePage() {
+  const sections = useHomepageCategorySections()
+  const location = useLocation()
+  const searchController = useRef(null)
+  const suggestionController = useRef(null)
+  const suggestionTimer = useRef(null)
+  const [query, setQuery] = useState('')
+  const [searchState, setSearchState] = useState({ status: 'idle', results: [], errors: [], error: '' })
+  const [suggestionState, setSuggestionState] = useState({ status: 'idle', results: [], error: '' })
+  const executeSearch = async (term, controller) => {
+    setSearchState({ status: 'loading', results: [], errors: [], error: '' })
+    try {
+      const result = await searchWebsite(term, controller.signal)
+      if (controller.signal.aborted) return
+      setSearchState({ status: 'success', results: result.results, errors: result.errors, error: '' })
+    } catch (error) {
+      if (!controller.signal.aborted && error.name !== 'AbortError') setSearchState({ status: 'error', results: [], errors: [], error: error.message || 'शोध करता आला नाही.' })
+    }
+  }
+  useEffect(() => {
+    const initialQuery = new URLSearchParams(location.search).get('search')?.trim()
+    if (!initialQuery) return undefined
+    setQuery(initialQuery)
+    setSuggestionState({ status: 'idle', results: [], error: '' })
+    const controller = new AbortController()
+    searchController.current?.abort()
+    searchController.current = controller
+    executeSearch(initialQuery, controller)
+    return () => controller.abort()
+  }, [location.search])
+  useEffect(() => () => {
+    searchController.current?.abort()
+    suggestionController.current?.abort()
+    window.clearTimeout(suggestionTimer.current)
+  }, [])
+
+  const updateQuery = (value) => {
+    setQuery(value)
+    searchController.current?.abort()
+    setSearchState({ status: 'idle', results: [], errors: [], error: '' })
+    suggestionController.current?.abort()
+    window.clearTimeout(suggestionTimer.current)
+    const prefix = value.trim()
+    if (!prefix) {
+      setSuggestionState({ status: 'idle', results: [], error: '' })
+      return
+    }
+    const controller = new AbortController()
+    suggestionController.current = controller
+    setSuggestionState({ status: 'loading', results: [], error: '', matchMode: '' })
+    suggestionTimer.current = window.setTimeout(async () => {
+      try {
+        const suggestions = await searchArticleTitleSuggestions(prefix, controller.signal)
+        if (!controller.signal.aborted) {
+          setSuggestionState({ status: 'success', results: suggestions.results, error: '', matchMode: suggestions.matchMode })
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && error.name !== 'AbortError') {
+          setSuggestionState({ status: 'error', results: [], error: 'लेख शोधता आले नाहीत. कृपया पुन्हा प्रयत्न करा.' })
+        }
+      }
+    }, 220)
+  }
+  const search = (event) => {
+    event.preventDefault()
+    if (!query.trim()) return
+    suggestionController.current?.abort()
+    window.clearTimeout(suggestionTimer.current)
+    setSuggestionState({ status: 'idle', results: [], error: '' })
+    searchController.current?.abort()
+    const controller = new AbortController()
+    searchController.current = controller
+    executeSearch(query, controller)
+  }
+
+  return (
+    <div className="home-page-content">
+      <section className="home-hero">
+        <div className="home-hero-inner">
+          <div className="home-hero-copy">
+            <h1>प्रत्येक मराठी<br />उद्योजकासाठी</h1>
+            <p>Business Ideas <span>•</span> सरकारी योजना <span>•</span> मार्गदर्शन <span>•</span> Success Stories</p>
+            <div className="home-search-area">
+              <form className="home-search" onSubmit={search}>
+                <Search size={19} aria-hidden="true" />
+                <input
+                  aria-label="माहिती शोधा"
+                  aria-autocomplete="list"
+                  aria-controls="home-search-suggestions"
+                  aria-expanded={suggestionState.status !== 'idle'}
+                  value={query}
+                  onChange={(event) => updateQuery(event.target.value)}
+                  placeholder="लेख, योजना किंवा व्यवसाय कल्पना शोधा"
+                />
+                <button type="submit">शोधा</button>
+              </form>
+              {suggestionState.status === 'loading' && <div className="home-search-status" role="status">लेख शोधत आहे…</div>}
+              {suggestionState.status === 'error' && <div className="home-search-status" role="alert">{suggestionState.error}</div>}
+              {suggestionState.status === 'success' && (
+                <div className="home-search-results" id="home-search-suggestions" role="listbox" aria-label="लेख सूचना">
+                  {suggestionState.results.length ? suggestionState.results.map((result) => (
+                    <Link className="home-search-result" key={result.id || result.title} to={result.to} role="option">
+                      <img src={result.image} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = logoUrl }} />
+                      <span><strong>{result.title}</strong><small>{result.kind} · {result.category} · {result.date}</small></span>
+                      <ArrowRight size={14} />
+                    </Link>
+                  )) : <span>या शोधासाठी जुळणारे लेख सापडले नाहीत.</span>}
+                </div>
+              )}
+              {searchState.status === 'loading' && <div className="home-search-status" role="status">शोधत आहे…</div>}
+              {searchState.status === 'error' && <div className="home-search-status" role="alert">{searchState.error}</div>}
+              {searchState.status === 'success' && (
+                <div className="home-search-results" role="status">
+                  {searchState.results.length ? searchState.results.map((result) => (
+                    <Link className="home-search-result" key={`${result.kind}-${result.id || result.title}`} to={result.to}>
+                      <img src={result.image} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = logoUrl }} />
+                      <span><strong>{result.title}</strong><small>{result.kind} · {result.category}</small></span>
+                      <ArrowRight size={14} />
+                    </Link>
+                  )) : <span>या शोधासाठी कोणतेही परिणाम सापडले नाहीत.</span>}
+                  {searchState.errors.length > 0 && <small className="home-search-warning">काही प्रकारचे परिणाम सध्या लोड झाले नाहीत.</small>}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="home-hero-art">
+            <div className="home-hero-photo home-hero-photo-main"><img src="https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=85" alt="व्यवसाय नियोजनावर चर्चा करणारी टीम" /></div>
+            <div className="home-hero-photo-badge">
+              <span><Building2 size={18} aria-hidden="true" /></span>
+              <div><strong>मराठी उद्योजकांसाठी</strong><small>कल्पना · मार्गदर्शन · संधी</small></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="home-topics">
+        <div className="home-section-heading"><span></span><h2>मुख्य विषय / <em>Explore Topics</em></h2><span></span></div>
+        <div className="home-topic-grid">
+          {HOMEPAGE_CATEGORIES.map(({ title, slug, Icon, color }) => (
+            <Link className={`home-topic-card home-topic-${color}`} to={`/category/${slug}`} key={slug}>
+              <Icon size={34} strokeWidth={2.5} />
+              <strong>{title}</strong>
+              <small>लेख आणि मार्गदर्शन</small>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <div className="home-category-sections">
+        {sections.map((section, sectionIndex) => (
+          <section className={`home-category-section home-category-${section.color}`} key={section.slug}>
+            <div className="home-category-head">
+              <div>
+                <span className="home-category-number">{String(sectionIndex + 1).padStart(2, '0')}</span>
+                <div><p>तुमच्यासाठी निवडक माहिती</p><h2>{section.title}</h2></div>
+              </div>
+              <Link className="home-category-all" to={`/category/${section.slug}`}>सर्व लेख पहा <ArrowRight size={16} /></Link>
+            </div>
+            {section.status === 'loading' && <div className="home-category-state" role="status">लेख लोड होत आहेत…</div>}
+            {section.status === 'error' && <div className="home-category-state" role="alert">{section.error}</div>}
+            {section.status === 'empty' && <div className="home-category-state">या विभागात लेख उपलब्ध नाहीत.</div>}
+            {section.articles.length > 0 && (
+              <div className="home-article-grid">
+                {section.articles.map((record) => {
+                  const article = mapArticleRecord(record)
+                  const excerpt = plainTextExcerpt(article.excerpt || article.subtitle || article.content || '')
+                  return (
+                    <article className="home-article-card" key={article.id || article.title}>
+                      <Link className="home-article-image" to={`/articles/${article.id}`}>
+                        <img src={article.image} alt={article.title} loading="lazy" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = logoUrl }} />
+                      </Link>
+                      <div className="home-article-copy">
+                        <span className="home-article-category">{section.title}</span>
+                        <h3><Link to={`/articles/${article.id}`}>{article.title}</Link></h3>
+                        {excerpt && <p>{excerpt}</p>}
+                        <div className="home-article-meta">
+                          <time>{article.publicationDate ? new Date(article.publicationDate).toLocaleDateString('mr-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'अलीकडील'}</time>
+                          <Link to={`/articles/${article.id}`}>Read More <ArrowRight size={14} /></Link>
+                        </div>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function IdeaCard({ idea }) {
+  return (
+    <article className="idea-card">
+      <Link to={`/business-ideas/${idea.id}`}><img src={idea.image} alt={idea.title} /><span className="card-category">{idea.category}</span></Link>
+      <div className="idea-card-body"><h3><Link to={`/business-ideas/${idea.id}`}>{idea.title}</Link></h3><div className="idea-meta"><span><MapPin size={14} />{idea.location}</span><span><TrendingUp size={14} />{idea.profit}</span></div><div className="idea-footer"><small>गुंतवणूक</small><strong>{idea.investment}</strong><Link to={`/business-ideas/${idea.id}`} aria-label={`${idea.title} पाहा`}><ArrowRight size={17} /></Link></div></div>
+    </article>
+  )
+}
+
+function ArticleCard({ article }) {
+  return <article className="article-card"><Link to={`/articles/${article.id}`}><img src={article.image} alt="" /></Link><div><span>{article.tag} · {article.date}</span><h3><Link to={`/articles/${article.id}`}>{article.title}</Link></h3></div></article>
+}
+
+function PageHeader({ title, subtitle, crumb }) {
+  return <section className="page-header"><div className="container"><div className="breadcrumb"><Link to="/">मुख्यपृष्ठ</Link><ChevronRight size={14} /><span>{crumb || title}</span></div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div></section>
+}
+
+function BusinessIdeas() {
+  const [query, setQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [maxInvestment, setMaxInvestment] = useState('')
+  const ideaState = useLiveIdeas()
+  const liveCategories = useLiveCategories()
+  const liveIdeas = ideaState.ideas
+  const filtered = liveIdeas.filter((idea) =>
+    (idea.title.includes(query) || idea.category.includes(query)) &&
+    (!categoryFilter || idea.category === categoryFilter) &&
+    (!maxInvestment || idea.investmentValue <= Number(maxInvestment))
+  )
+  return <>
+    <PageHeader title="व्यवसाय कल्पना" subtitle="तुमच्या गुंतवणूक आणि कौशल्यानुसार योग्य कल्पना निवडा." crumb="व्यवसाय कल्पना" />
+    <section className="section"><div className="container">
+      <div className="filter-bar"><label><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="व्यवसाय कल्पना शोधा" /></label><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">सर्व क्षेत्र</option>{liveCategories.map((category) => <option key={category._id} value={category.name}>{category.name}</option>)}</select><select value={maxInvestment} onChange={(event) => setMaxInvestment(event.target.value)}><option value="">सर्व गुंतवणूक</option><option value="25000">₹25 हजारपेक्षा कमी</option><option value="50000">₹50 हजारपर्यंत</option></select></div>
+      {ideaState.status === 'loading' && <div className="data-loading">Business Ideas लोड होत आहेत…</div>}
+      {ideaState.status === 'error' && <div className="data-notice" role="alert">{ideaState.error}</div>}
+      {ideaState.status === 'empty' && <div className="empty-state"><Search /><h3>कोणत्याही Business Ideas उपलब्ध नाहीत</h3><p>नवीन कल्पना जोडण्यासाठी फॉर्म वापरा.</p><Link to="/add-idea">Business Idea जोडा</Link></div>}
+      {ideaState.status === 'success' && (filtered.length ? <div className="idea-grid">{filtered.map((idea) => <IdeaCard key={idea.id} idea={idea} />)}</div> : <div className="empty-state"><Search /><h3>कोणतीही कल्पना सापडली नाही</h3><p>दुसरा शब्द किंवा filter वापरून पुन्हा शोधा.</p></div>)}
+    </div></section>
+  </>
+}
+
+function BusinessDetails() {
+  const { id } = useParams()
+  const ideaState = useLiveIdeas()
+  const liveIdeas = ideaState.ideas
+  const detailState = useLiveItem(`/api/business-ideas/${encodeURIComponent(id)}`, 'idea')
+  const listedIdea = liveIdeas.find((item) => String(item.id) === String(id))
+  const idea = detailState.item ? mapBusinessIdea(detailState.item) : listedIdea
+  if (!idea && detailState.status === 'loading') return <div className="data-loading" role="status">Business Idea लोड होत आहे…</div>
+  if (!idea && detailState.status === 'error') return <section className="section"><div className="container"><div className="data-notice" role="alert">{detailState.error}</div><Link to="/business-ideas">सर्व Business Ideas पाहा</Link></div></section>
+  if (!idea) return <section className="section"><div className="container"><div className="empty-state"><h1>Business Idea सापडली नाही</h1><p>ही कल्पना प्रकाशित नाही किंवा URL उपलब्ध नाही.</p><Link to="/business-ideas">सर्व Business Ideas पाहा</Link></div></div></section>
+
+  const sections = [
+    ['उद्योजकासाठी सुरुवातीची माहिती', idea.description],
+    ['मशीनरी आणि साधने', idea.machinery],
+    ['कच्चा माल', idea.rawMaterials],
+    ['परवान्या आणि आवश्यक नोंदणी', idea.licenses],
+    ['कामाची प्रक्रिया', idea.process],
+    ['मार्केटिंग आणि विक्री', idea.marketing],
+  ]
+
+  return <>
+    {detailState.status === 'error' && <div className="container"><div className="data-notice" role="status">{detailState.error} यादीतील जुळणारी कल्पना दाखवत आहोत.</div></div>}
+    <ArticleDetailLayout
+      header={<ArticleHeader
+        title={idea.title}
+        category={idea.category}
+        subtitle={idea.description}
+        date="नवीन बातमी"
+        breadcrumbParent="Business Ideas"
+        breadcrumbParentLink="/business-ideas"
+        readingTime="६ मि."
+      />}
+      image={idea.image}
+      imageAlt={idea.title}
+    >
+      {sections.filter(([, content]) => content && (typeof content === 'string' ? content.trim() : content.length)).map(([heading, content], index) => (
+        <section className="reference-article-section" key={heading}>
+          <h2>{index + 1}. {heading}</h2>
+          {Array.isArray(content)
+            ? <ul>{content.map((item) => <li key={item}>{item}</li>)}</ul>
+            : <p>{content}</p>}
+        </section>
+      ))}
+      <div className="reference-guidance-box">
+        <div><span>Business Guidance</span><h3>हा व्यवसाय सुरू करायचा आहे?</h3></div>
+        <Link to="/contact">मार्गदर्शन मिळवा <ArrowRight size={15} /></Link>
+      </div>
+    </ArticleDetailLayout>
+  </>
+}
+
+function GovernmentSchemes() {
+  const schemeState = useLiveSchemes()
+  return <>
+    <PageHeader title="सरकारी योजना" subtitle="उद्योजकांसाठी सरकारी अनुदान, कर्ज आणि प्रशिक्षण संधी." crumb="सरकारी योजना" />
+    <section className="section"><div className="container">
+      {schemeState.status === 'loading' && <div className="data-loading">Schemes लोड होत आहेत…</div>}
+      {schemeState.status === 'error' && <div className="data-notice" role="alert">{schemeState.error}</div>}
+      {schemeState.status === 'empty' && <div className="empty-state"><h2>योजना लवकरच जोडल्या जातील</h2><p>अधिकृत आणि पडताळलेली माहिती उपलब्ध झाल्यावर येथे दिसेल.</p></div>}
+      {schemeState.status === 'success' && <div className="scheme-grid">{schemeState.schemes.map((scheme) => <article className="scheme-card" key={scheme.id || scheme.title}><span>{scheme.tag}</span><h2><Link to={`/schemes/${scheme.id || scheme.title}`}>{scheme.title}</Link></h2><p>{scheme.agency}</p><div><small>अधिकृत तपशील</small><strong>{scheme.amount}</strong></div><Link className="scheme-detail-link" to={`/schemes/${scheme.id || scheme.title}`}>अधिक माहिती <ArrowRight size={16} /></Link></article>)}</div>}
+    </div></section>
+  </>
+}
+
+function Guidance() {
+  const steps = [{ icon: Lightbulb, title: 'कल्पना तपासा', text: 'ग्राहकाची गरज आणि स्थानिक बाजार समजून घ्या.' }, { icon: BadgeIndianRupee, title: 'गुंतवणूक नियोजित करा', text: 'सुरुवातीची किंमत आणि मासिक खर्च ठरवा.' }, { icon: Store, title: 'नोंदणी पूर्ण करा', text: 'आवश्यक परवाना, GST आणि बैंक खाते तयार करा.' }, { icon: TrendingUp, title: 'विक्री सुरू करा', text: 'प्रात्यक्षिके, डिजिटल प्रचार आणि संदर्भ वापरा.' }]
+  return <><PageHeader title="व्यवसाय मार्गदर्शन" subtitle="कल्पनेपासून व्यवसाय सुरू करण्यापर्यंत सोप्या पायऱ्या." crumb="मार्गदर्शन" /><section className="section"><div className="container guidance-grid">{steps.map(({ icon: Icon, title, text }, i) => <article key={title}><span>{i + 1}</span><Icon /><h2>{title}</h2><p>{text}</p></article>)}</div></section></>
+}
+
+function SuccessStories() {
+  const [page, setPage] = useState(1)
+  const storyState = useLiveStories(page)
+  return (
+    <>
+      <section className="stories-page-header">
+        <div className="container">
+          <div className="breadcrumb"><Link to="/">मुख्यपृष्ठ</Link><ChevronRight size={14}/><span>यशोगाथा</span></div>
+          <h1>यशोगाथा</h1>
+        </div>
+      </section>
+      <section className="stories-page">
+        <div className="container">
+          <div className="stories-toolbar"><h2>प्रेरणादायी कथा</h2><Link to="/add-story">+ तुमची Success Story पाठवा</Link></div>
+          {storyState.status === 'loading' && <div className="data-loading" role="status">Success Stories लोड होत आहेत…</div>}
+          {storyState.status === 'error' && <div className="data-notice" role="alert">{storyState.error}</div>}
+          {storyState.status === 'empty' && <div className="empty-state"><h3>अजून प्रकाशित Success Stories नाहीत</h3><p>तुमचा व्यवसाय प्रवास शेअर करून पहिली कथा पाठवा.</p><Link to="/add-story">तुमची कथा पाठवा</Link></div>}
+          {storyState.status === 'success' && <>
+            <div className="story-card-grid">
+              {storyState.stories.map((story) => (
+                <article className="story-list-card" key={story._id}>
+                  <Link className="story-image" to={`/stories/${story.slug}`}>
+                    {story.image ? <img src={story.image} alt={story.title} loading="lazy"/> : <span className="story-image-placeholder"><Building2 aria-hidden="true"/></span>}
+                    <span>यशोगाथा</span>
+                  </Link>
+                  <div className="story-card-copy">
+                    <div className="story-meta"><span><CircleUserRound size={13}/> {story.entrepreneurName}</span><span>{story.publicationDate ? new Date(story.publicationDate).toLocaleDateString('mr-IN') : story.city}</span></div>
+                    <h2><Link to={`/stories/${story.slug}`}>{story.title}</Link></h2>
+                    <p>{story.summary}</p>
+                    <Link className="read-story" to={`/stories/${story.slug}`}>पूर्ण कथा वाचा <ArrowRight size={14}/></Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="pagination">
+              <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>‹</button>
+              <button type="button" className="active">{page}</button>
+              <button type="button" disabled={!storyState.pagination || page >= storyState.pagination.pages} onClick={() => setPage((value) => value + 1)}>›</button>
+            </div>
+          </>}
+        </div>
+      </section>
+    </>
+  )
+}
+
+function SuccessStoryDetails() {
+  const { id } = useParams()
+  const detailState = useLiveItem(`/api/stories/${encodeURIComponent(id)}`, 'story')
+  const story = detailState.item
+  if (!story && detailState.status === 'loading') return <div className="data-loading" role="status">Success Story लोड होत आहे…</div>
+  if (!story && detailState.status === 'error') return <section className="section"><div className="container"><div className="data-notice" role="alert">{detailState.error}</div><Link to="/stories">सर्व Success Stories पाहा</Link></div></section>
+  if (!story) return <section className="section"><div className="container"><div className="empty-state"><h1>Success Story सापडली नाही</h1><p>ही कथा प्रकाशित नाही किंवा URL उपलब्ध नाही.</p><Link to="/stories">सर्व Success Stories पाहा</Link></div></div></section>
+  return <ArticleDetailLayout
+    header={<ArticleHeader
+      title={story.title}
+      category="यशोगाथा"
+      subtitle={story.summary}
+      date={story.publicationDate ? new Date(story.publicationDate).toLocaleDateString('mr-IN') : story.city}
+      author={story.entrepreneurName}
+      breadcrumbParent="Success Stories"
+      breadcrumbParentLink="/stories"
+    />}
+    image={story.image || undefined}
+    imageAlt={story.title}
+  >
+    <section className="reference-article-section"><h2>{story.businessName} · {story.city}</h2>{story.story.split(/\r?\n\s*\r?\n/).filter(Boolean).map((paragraph, index) => <p key={`${index}-${paragraph.slice(0, 20)}`}>{paragraph}</p>)}</section>
+  </ArticleDetailLayout>
+}
+
+function Articles() {
+  const [page, setPage] = useState(1)
+  const [articleState, setArticleState] = useState({ status: 'loading', articles: [], pagination: null })
+  useEffect(() => {
+    const controller = new AbortController()
+    setArticleState((current) => ({ ...current, status: 'loading' }))
+    fetch(`/api/articles?page=${page}&limit=12`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('API unavailable')))
+      .then((data) => setArticleState({
+        status: (data.articles || []).length ? 'success' : 'empty',
+        articles: (data.articles || []).map((article) => ({
+          id: article.slug || article._id,
+          title: article.title,
+          tag: article.category || 'लेख',
+          date: article.publicationDate ? new Date(article.publicationDate).toLocaleDateString('mr-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'अलीकडील',
+          image: article.featuredImage || article.ogImage || article.image || logoUrl,
+          excerpt: article.excerpt || article.subtitle || '',
+          content: article.content
+        })),
+        pagination: data.pagination
+      }))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setArticleState({ status: 'error', articles: [], pagination: null })
+      })
+    return () => controller.abort()
+  }, [page])
+  return <>
+    <section className="all-posts-header"><div className="container"><div className="breadcrumb"><Link to="/">मुख्यपृष्ठ</Link><ChevronRight size={14}/><span>All Posts</span></div><h1>सर्व पोस्ट्स</h1></div></section>
+    <section className="all-posts-page"><div className="container">
+      {articleState.status === 'loading' && <div className="data-loading">Articles लोड होत आहेत…</div>}
+      {articleState.status === 'error' && <div className="data-notice" role="alert">Articles लोड करता आले नाहीत. कृपया नंतर पुन्हा प्रयत्न करा.</div>}
+      {articleState.status === 'empty' && <div className="empty-state"><Search/><h3>कोणतेही Articles उपलब्ध नाहीत</h3><p>थोड्या वेळाने पुन्हा तपासा.</p></div>}
+      {articleState.status === 'success' && <><div className="all-posts-grid">{articleState.articles.map((article) => <article className="all-post-card" key={article.id}><Link className="all-post-image" to={`/articles/${article.id}`}><img src={article.image} alt={article.title} loading="lazy"/><span>{article.tag}</span></Link><div><h2><Link to={`/articles/${article.id}`}>{article.title}</Link></h2>{article.excerpt && <p>{article.excerpt.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,150)}</p>}<small>{article.date}</small></div></article>)}</div><div className="pagination"><button type="button" disabled={!articleState.pagination || page <= 1} onClick={() => setPage((value) => value - 1)}>‹</button>{Array.from({ length: Math.min(articleState.pagination?.pages || 1, 5) }, (_, index) => index + 1).map((pageNumber) => <button type="button" key={pageNumber} className={pageNumber === page ? 'active' : ''} onClick={() => setPage(pageNumber)}>{pageNumber}</button>)}<button type="button" disabled={!articleState.pagination || page >= articleState.pagination.pages} onClick={() => setPage((value) => value + 1)}>›</button></div></>}
+    </div></section>
+  </>
+}
+
+function SearchPage() {
+  const location = useLocation()
+  const searchController = useRef(null)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [status, setStatus] = useState({ value: 'idle', errors: [], message: '' })
+  const runSearch = async (term, controller) => {
+    setStatus({ value: 'loading', errors: [], message: '' })
+    try {
+      const data = await searchWebsite(term, controller.signal)
+      if (controller.signal.aborted) return
+      setResults(data.results)
+      setStatus({ value: 'success', errors: data.errors, message: '' })
+    } catch (error) {
+      if (!controller.signal.aborted && error.name !== 'AbortError') setStatus({ value: 'error', errors: [], message: error.message || 'Search आता उपलब्ध नाही.' })
+    }
+  }
+  useEffect(() => {
+    const initialQuery = new URLSearchParams(location.search).get('search')?.trim()
+    if (!initialQuery) return undefined
+    setQuery(initialQuery)
+    searchController.current?.abort()
+    const controller = new AbortController()
+    searchController.current = controller
+    runSearch(initialQuery, controller)
+    return () => controller.abort()
+  }, [location.search])
+  useEffect(() => () => searchController.current?.abort(), [])
+  const search = (event) => {
+    event.preventDefault()
+    if (!query.trim()) return
+    searchController.current?.abort()
+    const controller = new AbortController()
+    searchController.current = controller
+    runSearch(query.trim(), controller)
+  }
+  return <>
+    <section className="stories-page-header"><div className="container"><div className="breadcrumb"><Link to="/">मुख्यपृष्ठ</Link><ChevronRight size={14}/><span>Search</span></div><h1>वेबसाइटवर शोधा</h1></div></section>
+    <section className="section"><div className="container">
+      <form className="directory-search" onSubmit={search}><Search size={19}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="व्यवसाय कल्पना, योजना, मशीन किंवा लेख शोधा"/><button type="submit">शोधा</button></form>
+      {status.value === 'loading' && <div className="data-loading" role="status">Search करत आहे…</div>}
+      {status.value === 'error' && <div className="data-notice" role="alert">{status.message}</div>}
+      {status.value === 'success' && status.errors.length > 0 && <div className="data-notice" role="status">काही प्रकारचे परिणाम लोड झाले नाहीत.</div>}
+      {status.value === 'success' && (results.length ? <div className="search-result-grid">{results.map((result) => (
+        <article className="search-result-card" key={`${result.kind}-${result.id || result.title}`}>
+          <Link className="search-result-image" to={result.to}><img src={result.image} alt={result.title} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = logoUrl }} /><span>{result.kind}</span></Link>
+          <div><small>{result.category} · {result.date}</small><h2><Link to={result.to}>{result.title}</Link></h2>{result.excerpt && <p>{result.excerpt}</p>}<Link className="search-result-read" to={result.to}>Read More <ArrowRight size={15}/></Link></div>
+        </article>
+      ))}</div> : <div className="empty-state"><Search/><h3>कोणतेही परिणाम सापडले नाहीत</h3></div>)}
+    </div></section>
+  </>
+}
+
+function CategoryArchive() {
+  const { slug } = useParams()
+  const [state, setState] = useState({ status: 'loading', articles: [], category: slug })
+  const [page, setPage] = useState(1)
+  useEffect(() => {
+    setPage(1)
+  }, [slug])
+  useEffect(() => {
+    const controller = new AbortController()
+    setState((current) => ({ ...current, status: 'loading' }))
+    fetch(`/api/articles?category=${encodeURIComponent(slug)}&page=${page}&limit=12`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('API unavailable')))
+      .then((data) => setState({
+        status: 'success',
+        articles: data.articles || [],
+        pagination: data.pagination,
+        category: data.categoryName || slug,
+      }))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setState({ status: 'error', articles: [], category: slug })
+      })
+    return () => controller.abort()
+  }, [slug, page])
+
+  const categoryTitle = slug === 'entrepreneurship'
+    ? 'उद्योजकता'
+    : slug === 'sarkari-yojana'
+      ? 'सरकारी योजना'
+      : slug === 'technology'
+        ? 'तंत्रज्ञान'
+        : slug === 'farming-business'
+          ? 'शेती उद्योग'
+          : (state.category || slug)
+  const categorySubtitle = slug.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+  return <>
+    <section className="category-archive">
+      <div className="container category-archive-layout">
+        <main className="category-archive-main">
+          <div className="category-archive-panel">
+            <header className="category-archive-heading">
+              <div className="archive-breadcrumb"><Link to="/">Home</Link><ChevronRight size={13} /><span>{categoryTitle}</span></div>
+              <h1>{categoryTitle}</h1>
+              <p>{categorySubtitle}</p>
+            </header>
+            {state.status === 'loading' && <div className="data-loading" role="status">Articles लोड होत आहेत…</div>}
+            {state.status === 'error' && <div className="data-notice" role="alert">Category articles लोड करता आले नाहीत. कृपया नंतर पुन्हा प्रयत्न करा.</div>}
+            {state.status === 'success' && (
+              state.articles.length ? <>
+                <div className="category-article-list">{state.articles.map((article) => (
+                  <article className="category-article-card" key={article.slug || article._id}>
+                    <Link className="category-article-image" to={`/articles/${article.slug || article._id}`}>
+                      <img
+                        src={article.featuredImage || article.image || article.ogImage || logoUrl}
+                        alt={article.title}
+                        loading="lazy"
+                        onError={(event) => {
+                          if (event.currentTarget.dataset.fallback !== 'true') {
+                            event.currentTarget.dataset.fallback = 'true'
+                            event.currentTarget.src = logoUrl
+                          }
+                        }}
+                      />
+                    </Link>
+                    <div className="category-article-copy">
+                      <div className="category-article-meta">
+                        <span><CircleUserRound size={12} /> {article.authorName || article.author?.name || 'Marathi Udyojak'}</span>
+                        <time>{article.publicationDate ? new Date(article.publicationDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'अलीकडील'}</time>
+                        <span><MessageCircle size={12} /> {article.commentCount ?? 0}</span>
+                      </div>
+                      <h2><Link to={`/articles/${article.slug || article._id}`}>{article.title}</Link></h2>
+                      {(article.excerpt || article.subtitle) && <p>{plainTextExcerpt(article.excerpt || article.subtitle)}</p>}
+                      <Link className="category-read-more" to={`/articles/${article.slug || article._id}`}>Read More »</Link>
+                    </div>
+                  </article>
+                ))}</div>
+                <div className="pagination">
+                  <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>‹</button>
+                  {Array.from({ length: state.pagination?.pages || 1 }, (_, index) => index + 1)
+                    .filter((pageNumber) => pageNumber === 1 || pageNumber === state.pagination?.pages || Math.abs(pageNumber - page) <= 2)
+                    .map((pageNumber, index, visiblePages) => (
+                      <span key={pageNumber} className="pagination-item">
+                        {index > 0 && pageNumber - visiblePages[index - 1] > 1 && <button type="button" disabled>…</button>}
+                        <button type="button" className={pageNumber === page ? 'active' : ''} onClick={() => setPage(pageNumber)}>{pageNumber}</button>
+                      </span>
+                    ))}
+                  <button type="button" disabled={!state.pagination || page >= state.pagination.pages} onClick={() => setPage((value) => value + 1)}>›</button>
+                </div>
+              </> : <div className="empty-state"><h3>या Category मध्ये Articles उपलब्ध नाहीत</h3></div>
+            )}
+          </div>
+        </main>
+        <aside className="category-archive-sidebar">
+          <SiteSocialLinks />
+          <PopularPostsSidebar />
+        </aside>
+      </div>
+    </section>
+  </>
+}
+
+function plainTextExcerpt(value) {
+  const sanitized = DOMPurify.sanitize(value, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
+  const text = new DOMParser().parseFromString(sanitized, 'text/html').body.textContent?.replace(/\s+/g, ' ').trim() || ''
+  const characters = Array.from(text)
+  return characters.length > 150 ? `${characters.slice(0, 149).join('')}…` : text
+}
+
+function BusinessDirectory() {
+  const [query, setQuery] = useState('')
+  const businessState = useLiveBusinesses()
+  const filtered = businessState.businesses.filter((business) => `${business.name}${business.category}${business.city}${business.district}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  return <><PageHeader title="व्यवसाय डिरेक्टरी" subtitle="महाराष्ट्रातील मंजूर व्यवसाय शोधा." crumb="व्यवसाय डिरेक्टरी" /><section className="section"><div className="container">
+    <div className="directory-search"><Search size={19} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="व्यवसाय, सेवा किंवा शहर शोधा" /></div>
+    {businessState.status === 'loading' && <div className="data-loading" role="status">व्यवसाय लोड होत आहेत…</div>}
+    {businessState.status === 'error' && <div className="data-notice" role="alert">{businessState.error}</div>}
+    {businessState.status === 'empty' && <div className="empty-state"><h2>व्यवसाय अजून प्रकाशित झालेले नाहीत</h2><p>नोंदणी केल्यानंतर मंजुरी मिळाल्यावर व्यवसाय येथे दिसेल.</p><Link to="/add-business">व्यवसाय नोंदवा</Link></div>}
+    {businessState.status === 'success' && (filtered.length ? <div className="directory-grid">{filtered.map((business) => <article className="directory-card" key={business.id}>{business.image ? <img src={business.image} alt={business.name} loading="lazy"/> : <div className="directory-image-placeholder"><Building2 aria-hidden="true"/></div>}<div>{business.premium && <span className="premium">Premium</span>}<h2><Link to={`/directory/${business.id}`}>{business.name}</Link></h2><p>{business.category}</p><div><span><MapPin size={15} />{business.city}</span><Link to={`/directory/${business.id}`}><Phone size={15} />संपर्क</Link></div></div></article>)}</div> : <div className="empty-state"><h2>जुळणारा व्यवसाय सापडला नाही</h2><p>दुसरा शोध शब्द वापरून पहा.</p></div>)}
+  </div></section></>
+}
+
+function SchemeDetails() {
+  const { id } = useParams()
+  const schemeState = useLiveSchemes()
+  const detailState = useLiveItem(`/api/schemes/${encodeURIComponent(id)}`, 'scheme')
+  const listedScheme = schemeState.schemes.find((item) => String(item.id) === String(id))
+  const scheme = detailState.item ? mapSchemeRecord(detailState.item) : listedScheme
+  if (!scheme && detailState.status === 'loading') return <div className="data-loading" role="status">Scheme माहिती लोड होत आहे…</div>
+  if (!scheme && detailState.status === 'error') return <section className="section"><div className="container"><div className="data-notice" role="alert">{detailState.error}</div><Link to="/schemes">सर्व योजना पाहा</Link></div></section>
+  if (!scheme) return <section className="section"><div className="container"><div className="empty-state"><h1>योजना सापडली नाही</h1><p>ही योजना उपलब्ध नाही किंवा URL चुकीचा आहे.</p><Link to="/schemes">सर्व योजना पाहा</Link></div></div></section>
+  return <>
+    {detailState.status === 'error' && <div className="container"><div className="data-notice" role="status">{detailState.error} यादीतील जुळणारी योजना दाखवत आहोत.</div></div>}
+    <ArticleDetailLayout
+      header={<ArticleHeader
+        title={scheme.title}
+        category={scheme.tag}
+        subtitle={scheme.description}
+        date="Government Scheme"
+        breadcrumbParent="Government Schemes"
+        breadcrumbParentLink="/schemes"
+      />}
+    >
+      {scheme.eligibility?.length > 0 && <section className="reference-article-section"><h2>1. पात्रता</h2><ul>{scheme.eligibility.map((item) => <li key={item}>{item}</li>)}</ul></section>}
+      {scheme.benefits?.length > 0 && <section className="reference-article-section"><h2>2. लाभ</h2><ul>{scheme.benefits.map((item) => <li key={item}>{item}</li>)}</ul></section>}
+      {scheme.documents?.length > 0 && <section className="reference-article-section"><h2>3. आवश्यक कागदपत्रे</h2><ul>{scheme.documents.map((item) => <li key={item}>{item}</li>)}</ul></section>}
+      {scheme.process?.length > 0 && <section className="reference-article-section"><h2>4. अर्ज प्रक्रिया</h2><ul>{scheme.process.map((item) => <li key={item}>{item}</li>)}</ul></section>}
+      {scheme.officialUrl && <a className="reference-official-link" href={scheme.officialUrl} target="_blank" rel="noreferrer">अधिकृत वेबसाइटवर जाण्यासाठी <ArrowRight size={16} /></a>}
+    </ArticleDetailLayout>
+  </>
+}
+
+function BusinessDirectoryDetails() {
+  const { id } = useParams()
+  const resourcePath = /^[a-f\d]{24}$/i.test(id)
+    ? `/api/businesses/${encodeURIComponent(id)}`
+    : `/api/businesses/slug/${encodeURIComponent(id)}`
+  const detailState = useLiveItem(resourcePath, 'business')
+  const business = detailState.item ? mapBusinessRecord(detailState.item) : null
+  if (!business && detailState.status === 'loading') return <div className="data-loading" role="status">व्यवसाय माहिती लोड होत आहे…</div>
+  if (!business && detailState.status === 'error') return <section className="section"><div className="container"><div className="data-notice" role="alert">{detailState.error}</div><Link to="/directory">व्यवसाय डिरेक्टरी पाहा</Link></div></section>
+  if (!business) return <section className="section"><div className="container"><div className="empty-state"><h1>व्यवसाय सापडला नाही</h1><p>हा व्यवसाय उपलब्ध नाही किंवा मंजूर झालेला नाही.</p><Link to="/directory">व्यवसाय डिरेक्टरी पाहा</Link></div></div></section>
+  return <>
+    {detailState.status === 'error' && <div className="container"><div className="data-notice" role="status">{detailState.error} यादीतील व्यवसाय दाखवत आहोत.</div></div>}
+    <ArticleDetailLayout
+      header={<ArticleHeader
+        title={business.name}
+        category={business.category}
+        subtitle={business.description}
+        date={`${business.city}, ${business.district}`}
+        author={business.ownerName}
+        breadcrumbParent="Business Directory"
+        breadcrumbParentLink="/directory"
+      />}
+      image={business.image || undefined}
+      imageAlt={business.name}
+    >
+      <section className="reference-article-section"><h2>व्यवसायाची माहिती</h2><ul><li>शहर: {business.city}</li><li>जिल्हा: {business.district}</li><li>पत्ता: {business.address}</li>{business.email && <li>ईमेल: {business.email}</li>}{business.website && <li>वेबसाइट: <a href={business.website} target="_blank" rel="noreferrer">{business.website}</a></li>}</ul></section>
+      {business.phone && <div className="reference-guidance-box"><div><span>Customer Enquiry</span><h3>मोबाइलवर थेट चौकशी करा</h3></div><a href={`tel:${business.phone}`}><Phone size={15} /> संपर्क करा</a></div>}
+    </ArticleDetailLayout>
+  </>
+}
+
+function AddBusiness() {
+  const navigate = useNavigate()
+  const categoryItems = useLiveCategories()
+  const [submission, setSubmission] = useState({ status: 'idle', message: '' })
+  const submit = async (event) => {
+    event.preventDefault()
+    const token = localStorage.getItem('marathiUdyojakToken')
+    if (!token) {
+      navigate('/auth', { state: { from: '/add-business' } })
+      return
+    }
+    const formElement = event.currentTarget
+    setSubmission({ status: 'saving', message: '' })
+    try {
+      const response = await fetch('/api/businesses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(Object.fromEntries(new FormData(formElement).entries()))
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'व्यवसाय नोंदवता आला नाही.')
+      formElement.reset()
+      setSubmission({ status: 'success', message: 'तुमचे व्यवसाय नोंदणी निवेदन review साठी सेव्ह झाले. मंजुरीनंतर ते डिरेक्टरीमध्ये दिसेल.' })
+    } catch (error) {
+      setSubmission({ status: 'error', message: error.message })
+    }
+  }
+  return <><PageHeader title="तुमचा व्यवसाय जोडा" subtitle="नोंदणी करा; पडताळणीनंतर तुमची माहिती डिरेक्टरीमध्ये दिसेल." crumb="व्यवसाय जोडा" /><section className="section"><div className="container add-layout"><div className="plan-card"><h2>नोंदणी पर्याय</h2><article><strong>मोफत नोंदणी</strong><p>मूलभूत माहिती आणि ग्राहक चौकशी</p><span>₹०</span></article><article><strong>Premium नोंदणी</strong><p>प्राधान्य क्रम, फोटो आणि अधिक चौकशी</p><span>उपलब्ध लवकरच</span></article><article><strong>Featured प्रमोशन</strong><p>मुख्य पानावर विशेष जाहिरात</p><span>उपलब्ध लवकरच</span></article></div><form className="business-form" onSubmit={submit}>{submission.status === 'success' ? <div className="success-message" role="status"><HeartHandshake /><h2>नोंदणी निवेदन मिळाले</h2><p>{submission.message}</p></div> : <>{submission.status === 'error' && <div className="data-notice" role="alert">{submission.message}</div>}<h2>व्यवसायाची माहिती</h2><label>व्यवसायाचे नाव<input name="businessName" required minLength="2" maxLength="160" placeholder="उदा. श्रीगणेश खाद्य पदार्थ" /></label><label>मालकाचे नाव<input name="ownerName" required minLength="2" maxLength="100" placeholder="पूर्ण नाव" /></label><div className="form-row"><label>प्रकार<select name="category" required defaultValue=""><option value="" disabled>विभाग निवडा</option>{categoryItems.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}</select></label><label>शहर<input name="city" required placeholder="नाशिक" /></label></div><div className="form-row"><label>जिल्हा<input name="district" required placeholder="नाशिक" /></label><label>मोबाइल क्रमांक<input name="mobile" required type="tel" pattern="[0-9+\\- ]{10,15}" placeholder="9810012345" /></label></div><label>पूर्ण पत्ता<input name="address" required placeholder="दुकान / कार्यालयाचा पत्ता" /></label><label>ईमेल (ऐच्छिक)<input name="email" type="email" placeholder="name@example.com" /></label><label>वेबसाइट (ऐच्छिक)<input name="website" type="url" placeholder="https://..." /></label><label>संक्षिप्त माहिती<textarea name="description" required minLength="20" maxLength="3000" rows="4" placeholder="तुमच्या व्यवसायाबद्दल थोडक्यात..." /></label><button type="submit" disabled={submission.status === 'saving' || categoryItems.length === 0}>{submission.status === 'saving' ? 'नोंदणी सेव्ह होत आहे…' : 'नोंदणीसाठी पाठवा'} <ArrowRight size={17} /></button>{!localStorage.getItem('marathiUdyojakToken') && <small>नोंदणी पाठवण्यासाठी आधी लॉगिन करणे आवश्यक आहे.</small>}</>}</form></div></section></>
+}
+
+function SimplePage({ title, children }) {
+  return <>
+    <PageHeader title={title} crumb={title} />
+    <section className="section">
+      <div className="container simple-page-layout">
+        <div className="simple-copy">{children}</div>
+        <aside className="reference-sidebar-sticky"><PopularPostsSidebar /></aside>
+      </div>
+    </section>
+  </>
+}
+
+function About() { return <SimplePage title="आमच्याबद्दल"><h2>महाराष्ट्रासाठी मराठी उद्योजक मंच</h2><p>Marathi Udyojak उद्योजकतेची माहिती मराठी भाषेत सोप्या आणि विश्वासार्ह स्वरूपात उपलब्ध करून देण्याचा प्रयत्न करतो. आमचे उद्दिष्ट स्थानिक कल्पना, सरकारी संधी आणि व्यावसायिक अनुभव उद्योजकांपर्यंत पोहोचवणे हे आहे.</p><div className="value-grid"><article><Users /><h3>उद्योजक समुदाय</h3><p>व्यवहार्य अनुभव शेअर करणारे महाराष्ट्रभरातील उद्योजक.</p></article><article><Leaf /><h3>स्थानिक प्रगती</h3><p>स्थानिक संसाधन आणि कौशल्यांना आधार देणारी माहिती.</p></article><article><HeartHandshake /><h3>विश्वासार्ह मार्गदर्शन</h3><p>सुरूवातीपासून वाढीपर्यंत स्पष्ट आणि उपयुक्त दिशा.</p></article></div></SimplePage> }
+
+function Contact() {
+  const [submission, setSubmission] = useState({ status: 'idle', message: '' })
+  const submit = async (event) => {
+    event.preventDefault()
+    const formElement = event.currentTarget
+    setSubmission({ status: 'saving', message: '' })
+    try {
+      const response = await fetch('/api/enquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(new FormData(formElement).entries()))
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.message || 'संदेश पाठवता आला नाही.')
+      formElement.reset()
+      setSubmission({ status: 'success', message: 'तुमचे निवेदन सेव्ह झाले. आमची टीम त्याचा आढावा घेईल.' })
+    } catch (error) {
+      setSubmission({ status: 'error', message: error.message })
+    }
+  }
+  return <SimplePage title="संपर्क करा"><div className="contact-layout"><form className="business-form" onSubmit={submit}>{submission.status === 'success' ? <div className="success-message" role="status"><HeartHandshake/><h2>संदेश मिळाला</h2><p>{submission.message}</p></div> : <><h2>आपला संदेश पाठवा</h2>{submission.status === 'error' && <div className="data-notice" role="alert">{submission.message}</div>}<label>नाव<input name="name" required minLength="2" maxLength="100" placeholder="तुमचे नाव" /></label><label>मोबाइल<input name="mobile" required type="tel" pattern="[0-9+\\- ]{10,15}" placeholder="9810012345" /></label><label>ईमेल (ऐच्छिक)<input name="email" type="email" placeholder="name@example.com" /></label><label>संदेश<textarea name="message" required minLength="10" maxLength="2000" rows="5" placeholder="तुमची माहिती लिहा" /></label><button type="submit" disabled={submission.status === 'saving'}>{submission.status === 'saving' ? 'पाठवत आहे…' : 'संदेश पाठवा'} <ArrowRight size={17} /></button></>}</form><aside className="contact-info"><h2>संपर्क निवेदन</h2><p>तुमचा संदेश आमच्या टीमपर्यंत पोहोचवण्यासाठी फॉर्म भरा. निवेदन सुरक्षितपणे नोंदवले जाईल.</p><p><Mail /> ईमेल देणे ऐच्छिक आहे; प्रतिसादासाठी मोबाइल क्रमांक आवश्यक आहे.</p></aside></div></SimplePage>
+}
+
+function ArticleDetails() {
+  const { id } = useParams()
+  const articleState = useLiveArticles()
+  const detailState = useLiveItem(`/api/articles/slug/${encodeURIComponent(id)}`, 'article')
+  const listedArticle = articleState.articles.find((item) => String(item.id) === String(id))
+  const article = detailState.item ? mapArticleRecord(detailState.item) : listedArticle
+  const [relatedItems, setRelatedItems] = useState([])
+  useEffect(() => {
+    if (!id) return undefined
+    const controller = new AbortController()
+    fetch(`/api/articles/related/${encodeURIComponent(id)}?limit=3`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.message || 'Related articles unavailable')
+        return Array.isArray(data.articles) ? data.articles : []
+      })
+      .then((articles) => setRelatedItems(articles.map((record) => {
+        const item = mapArticleRecord(record)
+        return { title: item.title, image: item.image, to: `/articles/${item.id}` }
+      })))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setRelatedItems([])
+      })
+    return () => controller.abort()
+  }, [id])
+  useEffect(() => {
+    if (!article) {
+      document.title = detailState.status === 'not-found'
+        ? 'लेख सापडला नाही | Marathi Udyojak'
+        : detailState.status === 'error'
+          ? 'लेख उपलब्ध नाही | Marathi Udyojak'
+          : 'लेख लोड होत आहे | Marathi Udyojak'
+      return
+    }
+    const title = article.seoTitle || article.title
+    const description = article.seoDescription || (typeof article.content === 'string' ? article.content.replace(/<[^>]+>/g, '').slice(0, 160) : article.title)
+    document.title = `${title} | Marathi Udyojak`
+    const ensureMeta = (name, content, property = false) => {
+      if (!content) return
+      const selector = property ? `meta[property="${name}"]` : `meta[name="${name}"]`
+      let meta = document.head.querySelector(selector)
+      if (!meta) {
+        meta = document.createElement('meta')
+        if (property) meta.setAttribute('property', name)
+        else meta.setAttribute('name', name)
+        document.head.appendChild(meta)
+      }
+      meta.setAttribute('content', content)
+    }
+    ensureMeta('description', description)
+    ensureMeta('keywords', (article.keywords || []).join(', '))
+    ensureMeta('og:title', title, true)
+    ensureMeta('og:description', description, true)
+    ensureMeta('og:image', article.ogImage || article.image, true)
+    ensureMeta('og:url', article.canonicalUrl || window.location.href, true)
+    ensureMeta('og:type', 'article', true)
+    let canonical = document.head.querySelector('link[rel="canonical"]')
+    if (!canonical) {
+      canonical = document.createElement('link')
+      canonical.setAttribute('rel', 'canonical')
+      document.head.appendChild(canonical)
+    }
+    canonical.setAttribute('href', article.canonicalUrl || window.location.href)
+
+    let schema = document.head.querySelector('script[data-marathi-udyojak-article]')
+    if (!schema) {
+      schema = document.createElement('script')
+      schema.type = 'application/ld+json'
+      schema.setAttribute('data-marathi-udyojak-article', 'true')
+      document.head.appendChild(schema)
+    }
+    schema.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: title,
+      description,
+      image: article.ogImage || article.image,
+      datePublished: article.publicationDate || article.date,
+      author: { '@type': 'Organization', name: article.authorName || 'Marathi Udyojak' },
+      publisher: { '@type': 'Organization', name: 'Marathi Udyojak' },
+      mainEntityOfPage: article.canonicalUrl || window.location.href,
+    })
+  }, [article, detailState.status])
+  if (!article && detailState.status === 'loading') return <div className="data-loading" role="status">Article लोड होत आहे…</div>
+  if (!article && detailState.status === 'error') return <section className="section"><div className="container"><div className="data-notice" role="alert">{detailState.error}</div><Link to="/articles">सर्व लेख पाहा</Link></div></section>
+  if (!article) return <section className="section"><div className="container"><div className="empty-state"><h1>लेख सापडला नाही</h1><p>हा लेख प्रकाशित नाही किंवा URL उपलब्ध नाही.</p><Link to="/articles">सर्व लेख पाहा</Link></div></div></section>
+
+  const subtitle = plainTextExcerpt(article.subtitle || article.excerpt || '')
+  const firstParagraph = new DOMParser().parseFromString(DOMPurify.sanitize(article.content || ''), 'text/html').body.firstElementChild
+  const normalizedSubtitle = subtitle.toLocaleLowerCase()
+  const normalizedLead = firstParagraph?.tagName === 'P'
+    ? firstParagraph.textContent?.replace(/\s+/g, ' ').trim().toLocaleLowerCase()
+    : ''
+  const displayIntro = normalizedSubtitle && normalizedSubtitle.length >= 40 && normalizedLead?.startsWith(normalizedSubtitle)
+    ? ''
+    : subtitle
+
+  return <>
+    {detailState.status === 'error' && <div className="container"><div className="data-notice" role="status">{detailState.error} यादीतील जुळणारा लेख दाखवत आहोत.</div></div>}
+    <ArticleDetailLayout
+      header={<ArticleHeader
+        title={article.title}
+        category={article.tag}
+        date={article.date}
+        author={article.authorName}
+        readingTime={article.readingTime ? `${article.readingTime} मि.` : undefined}
+        commentCount={article.commentCount}
+        breadcrumbParent="Articles"
+        breadcrumbParentLink="/articles"
+      />}
+      variant="article"
+      image={article.image}
+      imageAlt={article.title}
+      articleSlug={article.id}
+      intro={displayIntro}
+      socialLinks={<SiteSocialLinks className="article-detail-social-links" />}
+      relatedItems={relatedItems.length ? relatedItems : articleState.articles.filter((item) => item.id !== article.id).slice(0, 3).map((item) => ({
+        title: item.title,
+        image: item.image,
+        to: `/articles/${item.id}`,
+      }))}
+    >
+      {typeof article.content === 'string' && (
+        <div
+          className="reference-rich-content"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content) }}
+        />
+      )}
+    </ArticleDetailLayout>
+  </>
+}
+
+function AddBusinessIdea() {
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const submit = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    const form = new FormData(event.currentTarget)
+    try {
+      const response = await fetch('/api/business-ideas/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(form.entries()))
+      })
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        throw new Error(result.message || 'Idea submit करता आली नाही.')
+      }
+      setSent(true)
+      event.currentTarget.reset()
+    } catch (submitError) {
+      setError(submitError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+  return <>
+    <section className="stories-page-header"><div className="container"><div className="breadcrumb"><Link to="/">मुख्यपृष्ठ</Link><ChevronRight size={14}/><span>Add Business Idea</span></div><h1>नवी Business Idea जोडा</h1></div></section>
+    <section className="section"><div className="container add-layout">
+      <aside className="story-submit-info"><Lightbulb size={38}/><h2>तुमची कल्पना शेअर करा</h2><p>योग्य तपशील भरल्यास तुमची idea websiteवर live card म्हणून दिसेल.</p></aside>
+      <form className="business-form" onSubmit={submit}>
+        {sent ? <div className="success-message"><HeartHandshake/><h2>Business Idea live झाली</h2><p>ही Idea आता MongoDBमध्ये सेव्ह झाली आणि websiteवर दिसेल.</p><Link to="/business-ideas">सर्व Ideas पहा <ArrowRight size={15}/></Link></div> : <>
+          {error && <div className="data-notice">{error}</div>}
+          <h2>Idea माहिती</h2>
+          <label>Business Idea Title<input name="title" required placeholder="उदा. Paper Cup Manufacturing"/></label>
+          <div className="form-row"><label>Category<input name="categoryName" required placeholder="उदा. Manufacturing"/></label><label>Investment<input name="investment" type="number" min="0" placeholder="50000"/></label></div>
+          <label>Investment Label<input name="investmentLabel" placeholder="उदा. ₹50 हजार+" /></label>
+          <label>Image URL<input name="image" type="url" placeholder="https://..." /></label>
+          <label>संक्षिप्त वर्णन<textarea name="description" required rows="5" placeholder="या व्यवसायाबद्दल माहिती लिहा..."/></label>
+          <div className="form-row"><label>Machinery<textarea name="machinery" rows="4" placeholder="प्रत्येक मुद्दा नवीन ओळीत"/></label><label>कच्चा माल<textarea name="rawMaterials" rows="4" placeholder="प्रत्येक मुद्दा नवीन ओळीत"/></label></div>
+          <div className="form-row"><label>Licenses<textarea name="licenses" rows="4" placeholder="प्रत्येक परवाना नवीन ओळीत"/></label><label>Marketing<textarea name="marketing" rows="4" placeholder="प्रत्येक marketing पद्धत नवीन ओळीत"/></label></div>
+          <button type="submit" disabled={saving}>{saving ? 'Save होत आहे…' : 'Idea Live करा'} <ArrowRight size={16}/></button>
+        </>}
+      </form>
+    </div></section>
+  </>
+}
+
+function AddStory() {
+  const [submission, setSubmission] = useState({ status: 'idle', message: '' })
+  const submit = async (event) => {
+    event.preventDefault()
+    setSubmission({ status: 'saving', message: '' })
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
+    try {
+      const response = await fetch('/api/stories/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.fromEntries(form.entries()))
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.message || 'Story submit करता आली नाही.')
+      formElement.reset()
+      setSubmission({ status: 'success', message: result.message || 'कथा review साठी जमा झाली.' })
+    } catch (error) {
+      setSubmission({ status: 'error', message: error.message })
+    }
+  }
+  return (
+    <>
+      <section className="stories-page-header"><div className="container"><div className="breadcrumb"><Link to="/">मुख्यपृष्ठ</Link><ChevronRight size={14}/><span>Success Story Submit</span></div><h1>तुमची Success Story सांगा</h1></div></section>
+      <section className="section"><div className="container story-submit-layout">
+        <aside className="story-submit-info"><Leaf size={38}/><h2>प्रेरणादायी कथा शेअर करा</h2><p>तुमच्या व्यवसाय प्रवासाने महाराष्ट्रातील नव्या उद्योजकांना प्रेरणा मिळू शकते.</p><ul><li>व्यवसायाची सुरुवात</li><li>मुळ समस्या आणि उपाय</li><li>आजची प्रगती</li></ul></aside>
+        <form className="business-form" onSubmit={submit}>
+          {submission.status === 'success' ? <div className="success-message" role="status"><HeartHandshake/><h2>कथा जमा झाली</h2><p>{submission.message} मंजुरीनंतर ती वेबसाइटवर दिसेल.</p><Link to="/stories">सर्व Success Stories पाहा</Link></div> : <>
+            {submission.status === 'error' && <div className="data-notice" role="alert">{submission.message}</div>}
+            <h2>Success Story माहिती</h2>
+            <label>उद्योजकाचे नाव<input name="entrepreneurName" required minLength="2" maxLength="100" placeholder="पूर्ण नाव"/></label>
+            <div className="form-row"><label>व्यवसायाचे नाव<input name="businessName" required minLength="2" maxLength="160" placeholder="व्यवसायाचे नाव"/></label><label>शहर<input name="city" required minLength="2" maxLength="100" placeholder="उदा. पुणे"/></label></div>
+            <label>कथेचे शीर्षक<input name="title" required minLength="5" maxLength="180" placeholder="उदा. छोट्या गावातून उभारलेला व्यवसाय"/></label>
+            <label>थोडक्यात सारांश<textarea name="summary" required minLength="20" maxLength="500" rows="3" placeholder="कथेचा सारांश लिहा"/></label>
+            <label>कथेचा फोटो URL (ऐच्छिक)<input name="image" type="url" placeholder="https://..."/></label>
+            <label>तुमची गोष्ट<textarea name="story" required minLength="30" maxLength="12000" rows="6" placeholder="तुमच्या संघर्षाचा, सुरुवातीचा आणि यशाचा प्रवास सांगा..."/></label>
+            <button type="submit" disabled={submission.status === 'saving'}>{submission.status === 'saving' ? 'पाठवत आहे…' : 'Story Submit करा'} <ArrowRight size={16}/></button>
+          </>}
+        </form>
+      </div></section>
+    </>
+  )
+}
+
+function PromotionsPage() {
+  const navigate = useNavigate()
+  const [paymentState, setPaymentState] = useState({ packageType: '', status: '', message: '' })
+  const packages = [
+    ['business_promotion','Paid Business Promotion','₹499'],
+    ['premium_listing','Premium Business Listing','₹999'],
+    ['featured_promotion','Featured Business Listing','₹2,999'],
+    ['sponsored_article','Sponsored Article','₹4,999'],
+    ['advertisement','Paid Advertisement','₹4,999'],
+    ['business_enquiry_promotion','Business Enquiry Promotion','₹299'],
+    ['membership','Premium Membership','₹1,999']
+  ]
+  const startCheckout = async (packageType) => {
+    const token = localStorage.getItem('marathiUdyojakToken')
+    if (!token) {
+      navigate('/auth', { state: { from: '/promotions' } })
+      return
+    }
+    setPaymentState({ packageType, status: 'loading', message: 'Order तयार होत आहे…' })
+    try {
+      const orderResponse = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ packageType })
+      })
+      const order = await orderResponse.json()
+      if (!orderResponse.ok) throw new Error(order.message || 'Payment order तयार झाला नाही.')
+      await loadRazorpayCheckout()
+      const checkout = new window.Razorpay({
+        key: order.keyId,
+        order_id: order.orderId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Marathi Udyojak',
+        description: packages.find(([type]) => type === packageType)?.[1] || 'Promotion',
+        handler: async (result) => {
+          setPaymentState({ packageType, status: 'loading', message: 'Payment verify होत आहे…' })
+          try {
+            const verifyResponse = await fetch('/api/payments/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                razorpayOrderId: result.razorpay_order_id,
+                razorpayPaymentId: result.razorpay_payment_id,
+                razorpaySignature: result.razorpay_signature
+              })
+            })
+            const verification = await verifyResponse.json()
+            if (!verifyResponse.ok) throw new Error(verification.message || 'Payment verify झाले नाही.')
+            setPaymentState({ packageType, status: 'success', message: 'Payment यशस्वी आणि verify झाले. Promotion active आहे.' })
+          } catch (error) {
+            setPaymentState({ packageType, status: 'error', message: error.message })
+          }
+        },
+        modal: {
+          ondismiss: () => setPaymentState({ packageType: '', status: '', message: '' })
+        }
+      })
+      checkout.on('payment.failed', (failure) => {
+        setPaymentState({ packageType, status: 'error', message: failure.error?.description || 'Payment अयशस्वी झाले.' })
+      })
+      setPaymentState({ packageType, status: 'checkout', message: 'Checkout मध्ये payment पूर्ण करा.' })
+      checkout.open()
+    } catch (error) {
+      setPaymentState({ packageType, status: 'error', message: error.message })
+    }
+  }
+  return <>
+    <section className="stories-page-header"><div className="container"><div className="breadcrumb"><Link to="/">मुख्यपृष्ठ</Link><ChevronRight size={14}/><span>Paid Promotions</span></div><h1>Promotion आणि Paid Services</h1></div></section>
+    <section className="section"><div className="container">
+      {paymentState.message && <div className={`data-notice payment-${paymentState.status}`} role="status">{paymentState.message}</div>}
+      <div className="guidance-grid">{packages.map(([type,title,price]) => <article key={type}><BadgeIndianRupee/><h2>{title}</h2><p>{price}</p><button className="reference-guidance-box" type="button" disabled={paymentState.status === 'loading'} onClick={() => startCheckout(type)}>{paymentState.packageType === type && paymentState.status === 'loading' ? 'प्रक्रिया सुरू…' : localStorage.getItem('marathiUdyojakToken') ? 'आता निवडा' : 'लॉगिन करून निवडा'} <ArrowRight size={15}/></button></article>)}</div>
+    </div></section>
+  </>
+}
+
+function useCmsCollection(url, token, collection) {
+  const [items, setItems] = useState([])
+  useEffect(() => {
+    if (!token) return
+    const controller = new AbortController()
+    fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('डेटा लोड करता आला नाही.')))
+      .then((data) => setItems(Array.isArray(data[collection]) ? data[collection] : []))
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setItems([])
+          console.error(`CMS ${collection} could not be loaded:`, error)
+        }
+      })
+    return () => controller.abort()
+  }, [url, token, collection])
+  return [items, setItems]
+}
+
+function useSettingsAdmin(token) {
+  const [settings, setSettings] = useState(null)
+  useEffect(() => {
+    if (!token) return
+    fetch('/api/cms/settings', { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Settings लोड करता आले नाहीत.')))
+      .then((data) => setSettings(data.settings))
+      .catch(() => setSettings(null))
+  }, [token])
+  return [settings, setSettings]
+}
+
+function CmsOverview({ statistics }) {
+  if (!statistics) return <div className="cms-loading">Dashboard लोड होत आहे…</div>
+  return <div className="cms-stat-grid">{Object.entries(statistics).map(([label, value]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</div>
+}
+
+function WebsiteSettingsAdmin({ settings, setSettings, saveJson }) {
+  if (!settings) return <div className="cms-loading">Settings लोड होत आहेत…</div>
+  const update = (path, value) => setSettings((current) => {
+    const next = structuredClone(current)
+    const keys = path.split('.')
+    let cursor = next
+    keys.slice(0, -1).forEach((key) => { cursor[key] ||= {}; cursor = cursor[key] })
+    cursor[keys.at(-1)] = value
+    return next
+  })
+  const submit = (event) => { event.preventDefault(); saveJson('/api/cms/settings', 'PUT', settings).catch((error) => alert(error.message)) }
+  return <form className="cms-panel cms-form" onSubmit={submit}>
+    <h2>Website & Central Settings</h2>
+    <div className="cms-grid">
+      <label>Website name<input value={settings.websiteName || ''} onChange={(event) => update('websiteName', event.target.value)} /></label>
+      <label>Website URL<input value={settings.websiteUrl || ''} onChange={(event) => update('websiteUrl', event.target.value)} /></label>
+      <label>Tagline<input value={settings.tagline || ''} onChange={(event) => update('tagline', event.target.value)} /></label>
+      <label>Logo URL<input value={settings.logo || ''} onChange={(event) => update('logo', event.target.value)} /></label>
+      <label>Default email<input type="email" value={settings.defaultEmail || ''} onChange={(event) => update('defaultEmail', event.target.value)} /></label>
+      <label>Default phone<input value={settings.defaultPhone || ''} onChange={(event) => update('defaultPhone', event.target.value)} /></label>
+    </div>
+    <h3>Central Gmail addresses</h3>
+    <div className="cms-grid">{[
+      ['generalEmail','General'], ['copyrightEmail','Copyright'], ['businessEmail','Business enquiry'],
+      ['advertisingEmail','Advertising'], ['supportEmail','Support']
+    ].map(([key, label]) => <label key={key}>{label}<input type="email" value={settings.contacts?.[key] || ''} onChange={(event) => update(`contacts.${key}`, event.target.value)} /></label>)}</div>
+    <h3>Social links</h3>
+    <div className="cms-grid">{['facebook','instagram','youtube','whatsapp','linkedin','x','telegram'].map((key) => <label key={key}>{key}<input value={settings.social?.[key] || ''} onChange={(event) => update(`social.${key}`, event.target.value)} /></label>)}</div>
+    <h3>SEO & Design</h3>
+    <div className="cms-grid">
+      <label>SEO title<input value={settings.seo?.title || ''} onChange={(event) => update('seo.title', event.target.value)} /></label>
+      <label>Meta description<textarea rows="3" value={settings.seo?.description || ''} onChange={(event) => update('seo.description', event.target.value)} /></label>
+      <label>Marathi font<input value={settings.design?.marathiFont || ''} onChange={(event) => update('design.marathiFont', event.target.value)} /></label>
+      <label>Primary color<input type="color" value={settings.design?.primaryColor || '#137a3d'} onChange={(event) => update('design.primaryColor', event.target.value)} /></label>
+    </div>
+    <button className="cms-primary" type="submit">Publish settings</button>
+  </form>
+}
+
+function GlobalContentAdmin({ content, setContent, saveJson }) {
+  const [draft, setDraft] = useState({ key: '', label: '', value: '', type: 'text', page: 'global', component: '' })
+  const submit = (event) => {
+    event.preventEvent?.()
+    event.preventDefault()
+    saveJson('/api/cms/content', 'POST', draft)
+      .then(({ content: saved }) => setContent((current) => [saved, ...current.filter((item) => item._id !== saved._id)]))
+      .catch((error) => alert(error.message))
+  }
+  return <div>
+    <form className="cms-panel cms-form" onSubmit={submit}>
+      <h2>Add or update content key</h2>
+      <div className="cms-grid">
+        <label>Content key<input required value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} /></label>
+        <label>Label<input required value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></label>
+        <label>Page<input value={draft.page} onChange={(event) => setDraft({ ...draft, page: event.target.value })} /></label>
+        <label>Component<input value={draft.component} onChange={(event) => setDraft({ ...draft, component: event.target.value })} /></label>
+        <label className="cms-span">Value<textarea required rows="4" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} /></label>
+      </div>
+      <button className="cms-primary" type="submit">Save & publish</button>
+    </form>
+    <div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>Key</th><th>Label</th><th>Page</th><th>Value</th><th>Status</th></tr></thead><tbody>{content.map((item) => <tr key={item._id}><td>{item.key}</td><td>{item.label}</td><td>{item.page}</td><td>{String(item.value)}</td><td>{item.status}</td></tr>)}</tbody></table></div>
+  </div>
+}
+
+function PageAdmin({ pages, setPages, saveJson }) {
+  const [selected, setSelected] = useState(null)
+  const open = (page) => setSelected(page ? structuredClone(page) : { title: '', slug: '', subtitle: '', content: '', pageType: 'page', status: 'draft', seoTitle: '', seoDescription: '' })
+  const submit = (event) => {
+    event.preventDefault()
+    const existing = Boolean(selected._id)
+    saveJson(existing ? `/api/cms/pages/${selected._id}` : '/api/cms/pages', existing ? 'PUT' : 'POST', selected)
+      .then(({ page }) => { setPages((current) => existing ? current.map((item) => item._id === page._id ? page : item) : [page, ...current]); setSelected(page) })
+      .catch((error) => alert(error.message))
+  }
+  if (selected) return <form className="cms-panel cms-form" onSubmit={submit}>
+    <div className="cms-editor-head"><h2>{selected.title || 'नवीन पृष्ठ'}</h2><button type="button" className="cms-secondary" onClick={() => setSelected(null)}>Back</button></div>
+    <div className="cms-grid">
+      <label>Page title<input required value={selected.title} onChange={(event) => setSelected({ ...selected, title: event.target.value })} /></label>
+      <label>URL slug<input required value={selected.slug} onChange={(event) => setSelected({ ...selected, slug: event.target.value })} /></label>
+      <label>Status<select value={selected.status || 'draft'} onChange={(event) => setSelected({ ...selected, status: event.target.value })}><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
+      <label>Page type<select value={selected.pageType || 'page'} onChange={(event) => setSelected({ ...selected, pageType: event.target.value })}><option value="page">Page</option><option value="landing">Landing</option><option value="article">Article</option></select></label>
+      <label className="cms-span">Subtitle<input value={selected.subtitle || ''} onChange={(event) => setSelected({ ...selected, subtitle: event.target.value })} /></label>
+      <label className="cms-span">Content<textarea rows="14" value={selected.content || ''} onChange={(event) => setSelected({ ...selected, content: event.target.value })} /></label>
+      <label>SEO title<input value={selected.seoTitle || ''} onChange={(event) => setSelected({ ...selected, seoTitle: event.target.value })} /></label>
+      <label>Meta description<textarea value={selected.seoDescription || ''} onChange={(event) => setSelected({ ...selected, seoDescription: event.target.value })} /></label>
+    </div>
+    <button className="cms-primary" type="submit">{selected.status === 'published' ? 'Publish page' : 'Save draft'}</button>
+  </form>
+  return <div className="cms-panel"><div className="cms-editor-head"><h2>Website pages</h2><button className="cms-primary" onClick={() => open(null)}>Create page</button></div><div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>Name</th><th>Slug</th><th>Type</th><th>Status</th><th></th></tr></thead><tbody>{pages.map((page) => <tr key={page._id}><td>{page.title}</td><td>/{page.slug}</td><td>{page.pageType}</td><td>{page.status}</td><td><button className="cms-link" onClick={() => open(page)}>Edit</button></td></tr>)}</tbody></table></div></div>
+}
+
+function ArticleAdmin({ articles, setArticles, token }) {
+  const [selected, setSelected] = useState(null)
+  const submit = async (event) => {
+    event.preventDefault()
+    const response = await fetch(`/api/articles/${selected._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(selected) })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || 'Article save अयशस्वी.')
+    setArticles((current) => current.map((item) => item._id === data.article._id ? data.article : item))
+  }
+  if (selected) return <form className="cms-panel cms-form" onSubmit={(event) => submit(event).catch((error) => alert(error.message))}>
+    <div className="cms-editor-head"><h2>Edit article</h2><button type="button" className="cms-secondary" onClick={() => setSelected(null)}>Back</button></div>
+    <div className="cms-grid">
+      <label>Title<input value={selected.title} onChange={(event) => setSelected({ ...selected, title: event.target.value })} /></label>
+      <label>Slug<input value={selected.slug} onChange={(event) => setSelected({ ...selected, slug: event.target.value })} /></label>
+      <label>Category<input value={selected.category || ''} onChange={(event) => setSelected({ ...selected, category: event.target.value })} /></label>
+      <label>Featured image URL<input value={selected.featuredImage || selected.image || ''} onChange={(event) => setSelected({ ...selected, featuredImage: event.target.value, image: event.target.value })} /></label>
+      <label className="cms-span">Subtitle<input value={selected.subtitle || ''} onChange={(event) => setSelected({ ...selected, subtitle: event.target.value })} /></label>
+      <label className="cms-span">Marathi content<textarea rows="16" value={selected.content || ''} onChange={(event) => setSelected({ ...selected, content: event.target.value })} /></label>
+      <label>SEO title<input value={selected.seoTitle || ''} onChange={(event) => setSelected({ ...selected, seoTitle: event.target.value })} /></label>
+      <label>Meta description<textarea value={selected.seoDescription || ''} onChange={(event) => setSelected({ ...selected, seoDescription: event.target.value })} /></label>
+      <label className="cms-check"><input type="checkbox" checked={Boolean(selected.isPublished)} onChange={(event) => setSelected({ ...selected, isPublished: event.target.checked })} /> Published</label>
+    </div><button className="cms-primary" type="submit">Save article</button>
+  </form>
+  return <div className="cms-panel"><h2>Articles</h2><div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>Title</th><th>Category</th><th>Status</th><th></th></tr></thead><tbody>{articles.map((article) => <tr key={article._id}><td>{article.title}</td><td>{article.category}</td><td>{article.isPublished ? 'Published' : 'Draft'}</td><td><button className="cms-link" onClick={() => setSelected(structuredClone(article))}>Edit</button></td></tr>)}</tbody></table></div></div>
+}
+
+function HomepageAdmin({ sections, setSections, articles, saveJson }) {
+  const [selected, setSelected] = useState(null)
+  const open = (section) => setSelected(section ? structuredClone(section) : { key: '', title: '', subtitle: '', categorySlug: '', limit: 6, order: 0, isActive: true, articleIds: [], desktopLayout: 'grid', mobileLayout: 'list', viewAllLink: '' })
+  const submit = (event) => {
+    event.preventDefault()
+    saveJson('/api/cms/homepage', 'POST', { ...selected, articleIds: selected.articleIds.map((item) => typeof item === 'string' ? item : item._id) })
+      .then(({ section }) => { setSections((current) => [section, ...current.filter((item) => item._id !== section._id)]); setSelected(null) })
+      .catch((error) => alert(error.message))
+  }
+  if (selected) return <form className="cms-panel cms-form" onSubmit={submit}>
+    <div className="cms-editor-head"><h2>Homepage section</h2><button type="button" className="cms-secondary" onClick={() => setSelected(null)}>Back</button></div>
+    <div className="cms-grid">
+      <label>Unique key<input required value={selected.key} onChange={(event) => setSelected({ ...selected, key: event.target.value })} /></label>
+      <label>Section title<input required value={selected.title} onChange={(event) => setSelected({ ...selected, title: event.target.value })} /></label>
+      <label>Subtitle<input value={selected.subtitle || ''} onChange={(event) => setSelected({ ...selected, subtitle: event.target.value })} /></label>
+      <label>Category slug<input value={selected.categorySlug || ''} onChange={(event) => setSelected({ ...selected, categorySlug: event.target.value })} /></label>
+      <label>Article count<input type="number" min="1" max="20" value={selected.limit} onChange={(event) => setSelected({ ...selected, limit: Number(event.target.value) })} /></label>
+      <label>Display order<input type="number" value={selected.order} onChange={(event) => setSelected({ ...selected, order: Number(event.target.value) })} /></label>
+      <label>Desktop layout<select value={selected.desktopLayout || 'grid'} onChange={(event) => setSelected({ ...selected, desktopLayout: event.target.value })}><option value="grid">Grid</option><option value="list">List</option><option value="featured">Featured</option></select></label>
+      <label>Mobile layout<select value={selected.mobileLayout || 'list'} onChange={(event) => setSelected({ ...selected, mobileLayout: event.target.value })}><option value="list">List</option><option value="carousel">Carousel</option></select></label>
+      <label className="cms-span">View all link<input value={selected.viewAllLink || ''} onChange={(event) => setSelected({ ...selected, viewAllLink: event.target.value })} /></label>
+      <label className="cms-span">Selected articles<select multiple value={(selected.articleIds || []).map((item) => typeof item === 'string' ? item : item._id)} onChange={(event) => setSelected({ ...selected, articleIds: [...event.target.selectedOptions].map((option) => option.value) })}>{articles.map((article) => <option key={article._id} value={article._id}>{article.title}</option>)}</select></label>
+      <label className="cms-check"><input type="checkbox" checked={Boolean(selected.isActive)} onChange={(event) => setSelected({ ...selected, isActive: event.target.checked })} /> Enabled</label>
+    </div>
+    <button className="cms-primary" type="submit">Publish section</button>
+  </form>
+  return <div className="cms-panel"><div className="cms-editor-head"><h2>Homepage sections</h2><button className="cms-primary" onClick={() => open(null)}>Create section</button></div><div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>Title</th><th>Count</th><th>Order</th><th>Status</th><th></th></tr></thead><tbody>{sections.map((section) => <tr key={section._id}><td>{section.title}</td><td>{section.limit}</td><td>{section.order}</td><td>{section.isActive ? 'Enabled' : 'Disabled'}</td><td><button className="cms-link" onClick={() => open(section)}>Edit</button></td></tr>)}</tbody></table></div></div>
+}
+
+function NavigationAdmin({ menus, setMenus, saveJson }) {
+  const [selected, setSelected] = useState(null)
+  const open = (menu) => setSelected(menu ? structuredClone(menu) : { key: '', label: '', location: 'header', isActive: true, items: [] })
+  const submit = (event) => {
+    event.preventDefault()
+    try {
+      const body = { ...selected, items: typeof selected.items === 'string' ? JSON.parse(selected.items) : selected.items }
+      saveJson('/api/cms/navigation', 'POST', body)
+        .then(({ menu }) => { setMenus((current) => [menu, ...current.filter((item) => item._id !== menu._id)]); setSelected(null) })
+        .catch((error) => alert(error.message))
+    } catch (error) {
+      alert('Navigation JSON वैध नाही.')
+    }
+  }
+  if (selected) return <form className="cms-panel cms-form" onSubmit={submit}>
+    <div className="cms-editor-head"><h2>Navigation menu</h2><button type="button" className="cms-secondary" onClick={() => setSelected(null)}>Back</button></div>
+    <div className="cms-grid">
+      <label>Menu key<input required value={selected.key} onChange={(event) => setSelected({ ...selected, key: event.target.value })} /></label>
+      <label>Menu label<input value={selected.label || ''} onChange={(event) => setSelected({ ...selected, label: event.target.value })} /></label>
+      <label>Location<select value={selected.location || 'header'} onChange={(event) => setSelected({ ...selected, location: event.target.value })}><option value="header">Header</option><option value="footer">Footer</option><option value="mobile">Mobile</option></select></label>
+      <label className="cms-check"><input type="checkbox" checked={Boolean(selected.isActive)} onChange={(event) => setSelected({ ...selected, isActive: event.target.checked })} /> Enabled</label>
+      <label className="cms-span">Menu items JSON<textarea rows="16" value={typeof selected.items === 'string' ? selected.items : JSON.stringify(selected.items || [], null, 2)} onChange={(event) => setSelected({ ...selected, items: event.target.value })} /></label>
+    </div><button className="cms-primary" type="submit">Publish navigation</button>
+  </form>
+  return <div className="cms-panel"><div className="cms-editor-head"><h2>Navigation menus</h2><button className="cms-primary" onClick={() => open(null)}>Create menu</button></div><div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>Key</th><th>Label</th><th>Location</th><th>Status</th><th></th></tr></thead><tbody>{menus.map((menu) => <tr key={menu._id}><td>{menu.key}</td><td>{menu.label}</td><td>{menu.location}</td><td>{menu.isActive ? 'Enabled' : 'Disabled'}</td><td><button className="cms-link" onClick={() => open(menu)}>Edit</button></td></tr>)}</tbody></table></div></div>
+}
+
+function MediaAdmin({ media, setMedia, token }) {
+  const [title, setTitle] = useState('')
+  const [altText, setAltText] = useState('')
+  const upload = async (event) => {
+    event.preventDefault()
+    const input = event.currentTarget.elements.image
+    if (!input.files?.[0]) return
+    const form = new FormData()
+    form.append('image', input.files[0])
+    form.append('title', title)
+    form.append('altText', altText)
+    const response = await fetch('/api/cms/media', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || 'Upload अयशस्वी.')
+    setMedia((current) => [data.media, ...current])
+  }
+  return <div><form className="cms-panel cms-form" onSubmit={(event) => upload(event).catch((error) => alert(error.message))}>
+    <h2>Upload image</h2><div className="cms-grid"><label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>Alt text<input value={altText} onChange={(event) => setAltText(event.target.value)} /></label><label className="cms-span">Image<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required /></label></div><button className="cms-primary" type="submit">Upload</button>
+  </form><div className="cms-media-grid">{media.map((item) => <article key={item._id}><img src={item.url} alt={item.altText} /><strong>{item.title}</strong><small>{item.mimeType} • {Math.round(item.size / 1024)} KB</small></article>)}</div></div>
+}
+
+function RevisionAdmin({ revisions, token, saveJson }) {
+  const restore = async (id) => {
+    if (!window.confirm('Restore this previous version?')) return
+    try { await saveJson(`/api/cms/revisions/${id}/restore`, 'POST', {}) } catch (error) { alert(error.message) }
+  }
+  return <div className="cms-panel"><h2>Revision history</h2><div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>Entity</th><th>Change</th><th>Editor</th><th>Date</th><th></th></tr></thead><tbody>{revisions.map((item) => <tr key={item._id}><td>{item.entityType}</td><td>{item.summary}</td><td>{item.editor?.name || 'Admin'}</td><td>{new Date(item.createdAt).toLocaleString('mr-IN')}</td><td>{item.oldValue && <button className="cms-link" onClick={() => restore(item._id)}>Restore</button>}</td></tr>)}</tbody></table></div></div>
+}
+
+function StoryAdmin({ stories, setStories, token }) {
+  const [message, setMessage] = useState('')
+  const publish = async (id) => {
+    setMessage('')
+    try {
+      const response = await fetch(`/api/stories/${id}/publish`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Story publish करता आली नाही.')
+      setStories((current) => current.map((story) => story._id === id ? data.story : story))
+      setMessage('Story प्रकाशित झाली.')
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+  return <div className="cms-panel"><h2>Success Story Review</h2>{message && <div className="data-notice" role="status">{message}</div>}<div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>कथा</th><th>उद्योजक / व्यवसाय</th><th>शहर</th><th>स्थिती</th><th></th></tr></thead><tbody>{stories.map((story) => <tr key={story._id}><td>{story.title}<small>{story.summary}</small></td><td>{story.entrepreneurName}<small>{story.businessName}</small></td><td>{story.city}</td><td>{story.isPublished ? 'Published' : 'Review pending'}</td><td>{!story.isPublished && <button className="cms-link" type="button" onClick={() => publish(story._id)}>Publish</button>}</td></tr>)}</tbody></table></div>{!stories.length && <p>Review साठी कथा उपलब्ध नाहीत.</p>}</div>
+}
+
+function AdminDashboard() {
+  const token = localStorage.getItem('marathiUdyojakToken')
+  const [active, setActive] = useState('overview')
+  const [statistics, setStatistics] = useState(null)
+  const [message, setMessage] = useState('')
+  const [settings, setSettings] = useSettingsAdmin(token)
+  const [content, setContent] = useCmsCollection('/api/cms/content', token, 'content')
+  const [pages, setPages] = useCmsCollection('/api/cms/pages', token, 'pages')
+  const [sections, setSections] = useCmsCollection('/api/cms/homepage', token, 'sections')
+  const [navigation, setNavigation] = useCmsCollection('/api/cms/navigation', token, 'menus')
+  const [articles, setArticles] = useCmsCollection('/api/cms/articles', token, 'articles')
+  const [media, setMedia] = useCmsCollection('/api/cms/media', token, 'media')
+  const [revisions, setRevisions] = useCmsCollection('/api/cms/revisions', token, 'revisions')
+  const [stories, setStories] = useCmsCollection('/api/stories/admin', token, 'stories')
+
+  useEffect(() => {
+    if (!token) return
+    fetch('/api/admin/dashboard', { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Admin authorization आवश्यक आहे.')))
+      .then((data) => setStatistics(data.statistics))
+      .catch((error) => setMessage(error.message))
+  }, [token])
+
+  const menu = [
+    ['overview', 'Dashboard Overview'], ['settings', 'Website Settings'], ['global', 'Global Content'],
+    ['pages', 'Page Manager'], ['articles', 'Article Manager'], ['homepage', 'Homepage Manager'],
+    ['navigation', 'Navigation Manager'], ['stories', 'Success Stories'], ['media', 'Media Library'], ['revisions', 'Revision History']
+  ]
+
+  const saveJson = async (url, method, body) => {
+    setMessage('')
+    const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || 'Save अयशस्वी.')
+    setMessage('Saved successfully.')
+    return data
+  }
+
+  if (!token) return <section className="section"><div className="container"><div className="data-notice">Admin accessासाठी लॉगिन करा. <Link to="/auth" state={{ from: '/admin' }}>लॉगिन</Link></div></div></section>
+
+  return <section className="cms-admin">
+    <aside className="cms-sidebar">
+      <div className="cms-brand"><strong>मराठी<span>उद्योजक</span></strong><small>CMS Admin</small></div>
+      <nav>{menu.map(([key, label]) => <button key={key} className={active === key ? 'active' : ''} onClick={() => setActive(key)}>{label}</button>)}</nav>
+    </aside>
+    <main className="cms-main">
+      <header className="cms-topbar"><div><small>Management Console</small><h1>{menu.find(([key]) => key === active)?.[1]}</h1></div>{message && <div className="cms-message">{message}</div>}</header>
+      {active === 'overview' && <CmsOverview statistics={statistics} />}
+      {active === 'settings' && <WebsiteSettingsAdmin settings={settings} setSettings={setSettings} saveJson={saveJson} />}
+      {active === 'global' && <GlobalContentAdmin content={content} setContent={setContent} saveJson={saveJson} />}
+      {active === 'pages' && <PageAdmin pages={pages} setPages={setPages} saveJson={saveJson} />}
+      {active === 'articles' && <ArticleAdmin articles={articles} setArticles={setArticles} token={token} />}
+      {active === 'homepage' && <HomepageAdmin sections={sections} setSections={setSections} articles={articles} saveJson={saveJson} />}
+      {active === 'navigation' && <NavigationAdmin menus={navigation} setMenus={setNavigation} saveJson={saveJson} />}
+      {active === 'stories' && <StoryAdmin stories={stories} setStories={setStories} token={token} />}
+      {active === 'media' && <MediaAdmin media={media} setMedia={setMedia} token={token} />}
+      {active === 'revisions' && <RevisionAdmin revisions={revisions} token={token} saveJson={saveJson} />}
+    </main>
+  </section>
+}
+
+function Auth() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [mode, setMode] = useState('login')
+  const [status, setStatus] = useState({ saving: false, message: '' })
+  const submit = async (event) => {
+    event.preventDefault()
+    setStatus({ saving: true, message: '' })
+    const form = new FormData(event.currentTarget)
+    const identifier = form.get('identifier')
+    const payload = mode === 'register'
+      ? { name: form.get('name'), email: identifier.includes('@') ? identifier : undefined, mobile: identifier.includes('@') ? undefined : identifier, password: form.get('password') }
+      : { identifier, password: form.get('password') }
+    try {
+      const response = await fetch(`/api/auth/${mode === 'register' ? 'register' : 'login'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Authentication अयशस्वी.')
+      if (data.token) localStorage.setItem('marathiUdyojakToken', data.token)
+      setStatus({ saving: false, message: mode === 'login' ? 'लॉगिन सफल झाले.' : 'नवीन खाते तयार झाले.' })
+      if (data.token) {
+        const adminRoles = ['admin', 'super_admin', 'content_editor', 'design_manager']
+        const destination = location.state?.from || (adminRoles.includes(data.user?.role) ? '/admin' : '/')
+        navigate(destination, { replace: true })
+      }
+    } catch (error) {
+      setStatus({ saving: false, message: error.message })
+    }
+  }
+  return <><section className="auth-section"><div className="auth-card"><div className="auth-brand"><Sprout /><strong>मराठी<span>उद्योजक</span></strong></div><h1>{mode === 'login' ? 'लॉगिन करा' : 'नवीन खाते तयार करा'}</h1><p>{mode === 'login' ? 'तुमच्या व्यवसाय प्रोफाइलमध्ये प्रवेश करा.' : 'व्यवसाय नोंदणी आणि मार्गदर्शनासाठी नोंदणी करा.'}</p><form onSubmit={submit}>{mode === 'register' && <label>पूर्ण नाव<input name="name" required placeholder="तुमचे नाव" /></label>}<label>ईमेल किंवा मोबाइल<input name="identifier" required placeholder="ईमेल / मोबाइल" /></label><label>पासवर्ड<input name="password" required type="password" minLength="8" placeholder="पासवर्ड" /></label>{status.message && <div className="data-notice">{status.message}</div>}<button type="submit" disabled={status.saving}>{status.saving ? 'प्रक्रिया सुरू…' : mode === 'login' ? 'लॉगिन' : 'नोंदणी करा'}</button></form><button className="mode-switch" onClick={() => { setStatus({ saving: false, message: '' }); setMode(mode === 'login' ? 'register' : 'login') }}>{mode === 'login' ? 'नवीन खाते तयार करा' : 'आधीच खाते आहे? लॉगिन करा'}</button></div></section></>
+}
+
+let razorpayScriptPromise
+function loadRazorpayCheckout() {
+  if (window.Razorpay) return Promise.resolve()
+  if (!razorpayScriptPromise) {
+    razorpayScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => window.Razorpay ? resolve() : reject(new Error('Razorpay checkout load झाले नाही.'))
+      script.onerror = () => reject(new Error('Razorpay checkout उपलब्ध नाही.'))
+      document.body.appendChild(script)
+    }).catch((error) => {
+      razorpayScriptPromise = null
+      throw error
+    })
+  }
+  return razorpayScriptPromise
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
+  )
+}
+
+function AppContent() {
+  const location = useLocation()
+  const isAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  const isHomeRoute = location.pathname === '/'
+  const isCategoryArchiveRoute = /^\/category\/[^/]+\/?$/.test(location.pathname)
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/cms/public/settings', { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Settings unavailable')))
+      .then(({ settings }) => {
+        if (!settings) return
+        if (settings.websiteName) document.title = settings.websiteName
+        if (settings.design?.primaryColor) document.documentElement.style.setProperty('--green', settings.design.primaryColor)
+        if (settings.design?.accentColor) document.documentElement.style.setProperty('--orange', settings.design.accentColor)
+        if (settings.design?.backgroundColor) document.documentElement.style.setProperty('--page-bg', settings.design.backgroundColor)
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') console.error('Public website settings could not be loaded:', error)
+      })
+    return () => controller.abort()
+  }, [])
+  return (
+    <div className={`${isHomeRoute ? 'home-page-shell' : ''}${isCategoryArchiveRoute ? ' category-page-shell' : ''}`.trim() || undefined}>
+      {!isAdminRoute && <Header />}
+      <main>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/business-ideas" element={<BusinessIdeas />} />
+          <Route path="/business-ideas/:id" element={<BusinessDetails />} />
+          <Route path="/add-idea" element={<AddBusinessIdea />} />
+          <Route path="/schemes" element={<GovernmentSchemes />} />
+          <Route path="/schemes/:id" element={<SchemeDetails />} />
+          <Route path="/guidance" element={<Guidance />} />
+          <Route path="/stories" element={<SuccessStories />} />
+          <Route path="/stories/:id" element={<SuccessStoryDetails />} />
+          <Route path="/add-story" element={<AddStory />} />
+          <Route path="/articles" element={<Articles />} />
+          <Route path="/all-posts" element={<Articles />} />
+          <Route path="/category/:slug" element={<CategoryArchive />} />
+          <Route path="/articles/:id" element={<ArticleDetails />} />
+          <Route path="/directory" element={<BusinessDirectory />} />
+          <Route path="/directory/:id" element={<BusinessDirectoryDetails />} />
+          <Route path="/add-business" element={<AddBusiness />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/about-us" element={<PageDetails />} />
+          <Route path="/contact-us" element={<PageDetails />} />
+          <Route path="/faq" element={<PageDetails />} />
+          <Route path="/privacy-policy" element={<PageDetails />} />
+          <Route path="/privacy-policy-2" element={<PageDetails />} />
+          <Route path="/terms-and-conditions" element={<PageDetails />} />
+          <Route path="/dmca-notice" element={<PageDetails />} />
+          <Route path="/affiliate-disclosure-marathi-udyojak" element={<PageDetails />} />
+          <Route path="/marathi-udyojak-whatsapp-group-telegram-group-facebook-group-udyojak-online" element={<PageDetails />} />
+          <Route path="/page/:slug" element={<PageDetails />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/promotions" element={<PromotionsPage />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Routes>
+      </main>
+      {!isAdminRoute && <Footer />}
+    </div>
+  )
+}
+
+export default App

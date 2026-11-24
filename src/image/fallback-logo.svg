@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="256" fill="#07810b"/>
+  <circle cx="256" cy="256" r="188" fill="#ffffff"/>
+  <path d="M256 92c-23 75-92 88-92 167 0 58 43 103 92 103s92-45 92-103c0-79-69-92-92-167zm0 86c12 44 38 70 38 112 0 31-18 56-38 56s-38-25-38-56c0-42 26-68 38-112z" fill="#07810b"/>
+  <text x="256" y="444" text-anchor="middle" fill="#07810b" font-family="Arial, sans-serif" font-size="42" font-weight="700">मराठी उद्योजक</text>
+</svg>

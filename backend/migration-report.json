@@ -1,0 +1,26 @@
+{
+  "completedAt": "2026-11-21T17:21:03.771Z",
+  "source": "https://marathiudyojak.com",
+  "categories": {
+    "discovered": 73,
+    "created": 0,
+    "updated": 73,
+    "failed": []
+  },
+  "posts": {
+    "totalDiscovered": 65,
+    "migrated": 0,
+    "duplicatesSkipped": 0,
+    "protectedExistingSkipped": 0,
+    "failed": [],
+    "imagesProcessed": 0
+  },
+  "pages": {
+    "discovered": 17,
+    "migrated": 17,
+    "duplicatesSkipped": 0,
+    "failed": []
+  },
+  "navigationItems": 9,
+  "homepageSections": 10
+}
