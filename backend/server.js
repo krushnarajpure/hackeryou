@@ -8,6 +8,7 @@ const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 
 const app = express();
+const publicSiteUrl = 'https://expressudyojak.vercel.app';
 
 app.set('trust proxy', 1);
 app.use(helmet({
@@ -51,14 +52,82 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { fallthroug
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', database: 'connected' }));
 app.get('/api/homepage', require('./controllers/articleController').getHomepage);
 app.get('/robots.txt', (_req, res) => {
-  res.type('text/plain').send(`User-agent: *\nAllow: /\nSitemap: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/sitemap.xml\n`);
+  res.type('text/plain').send(`User-agent: *
+Allow: /
+
+Sitemap: ${publicSiteUrl}/sitemap.xml
+`);
 });
 app.get('/sitemap.xml', async (_req, res, next) => {
   try {
     const Article = require('./models/Article');
-    const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
-    const articles = await Article.find({ isPublished: true }).select('slug canonicalUrl updatedAt').sort({ updatedAt: -1 });
-    const urls = articles.map((article) => `<url><loc>${article.canonicalUrl || `${baseUrl}/articles/${article.slug}`}</loc><lastmod>${article.updatedAt.toISOString()}</lastmod></url>`).join('');
+    const Category = require('./models/Category');
+    const BusinessIdea = require('./models/BusinessIdea');
+    const Scheme = require('./models/GovernmentScheme');
+    const Story = require('./models/SuccessStory');
+    const Page = require('./models/Page');
+    const Book = require('./models/Book');
+    const Business = require('./models/Business');
+    const escapeXml = (value) => String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+    const isoDate = (value) => {
+      const date = value ? new Date(value) : null;
+      return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+    };
+
+    const [articles, categories, ideas, schemes, stories, pages, books, businesses] = await Promise.all([
+      Article.find({ isPublished: true }).select('slug updatedAt').sort({ updatedAt: -1 }),
+      Category.find({ isActive: true }).select('slug updatedAt'),
+      BusinessIdea.find({ isPublished: true }).select('slug updatedAt'),
+      Scheme.find({ isActive: true }).select('slug updatedAt'),
+      Story.find({ isPublished: true }).select('slug updatedAt'),
+      Page.find({ isPublished: true }).select('slug updatedAt'),
+      Book.find({ status: 'published' }).select('slug updatedAt'),
+      Business.find({ approvalStatus: 'approved' }).select('slug updatedAt')
+    ]);
+
+    const staticPaths = [
+      '/',
+      '/business-ideas',
+      '/guidance',
+      '/business-loans',
+      '/schemes',
+      '/stories',
+      '/articles',
+      '/business-licenses',
+      '/business-setup',
+      '/government-schemes',
+      '/machinery-equipment',
+      '/franchise-opportunities',
+      '/directory',
+      '/about-us',
+      '/contact-us',
+      '/faq',
+      '/privacy-policy',
+      '/terms-and-conditions',
+      '/dmca-notice',
+      '/affiliate-disclosure-marathi-udyojak',
+      '/books'
+    ];
+    const entries = staticPaths.map((pathname) => ({ loc: `${publicSiteUrl}${pathname}`, lastmod: null }));
+    articles.forEach((article) => article.slug && entries.push({ loc: `${publicSiteUrl}/articles/${article.slug}`, lastmod: isoDate(article.updatedAt) }));
+    categories.forEach((category) => category.slug && category.slug !== 'business-loans' && entries.push({ loc: `${publicSiteUrl}/category/${category.slug}`, lastmod: isoDate(category.updatedAt) }));
+    ideas.forEach((idea) => idea.slug && entries.push({ loc: `${publicSiteUrl}/business-ideas/${idea.slug}`, lastmod: isoDate(idea.updatedAt) }));
+    schemes.forEach((scheme) => scheme.slug && entries.push({ loc: `${publicSiteUrl}/schemes/${scheme.slug}`, lastmod: isoDate(scheme.updatedAt) }));
+    stories.forEach((story) => story.slug && entries.push({ loc: `${publicSiteUrl}/stories/${story.slug}`, lastmod: isoDate(story.updatedAt) }));
+    pages.forEach((page) => page.slug && entries.push({ loc: `${publicSiteUrl}/page/${page.slug}`, lastmod: isoDate(page.updatedAt) }));
+    books.forEach((book) => book.slug && entries.push({ loc: `${publicSiteUrl}/books/${book.slug}`, lastmod: isoDate(book.updatedAt) }));
+    businesses.forEach((business) => business.slug && entries.push({ loc: `${publicSiteUrl}/directory/${business.slug}`, lastmod: isoDate(business.updatedAt) }));
+
+    const uniqueEntries = Array.from(new Map(entries.map((entry) => [entry.loc, entry])).values());
+    const urls = uniqueEntries.map((entry) => {
+      const lastmod = entry.lastmod ? `<lastmod>${entry.lastmod}</lastmod>` : '';
+      return `<url><loc>${escapeXml(entry.loc)}</loc>${lastmod}</url>`;
+    }).join('');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   } catch (error) {
     next(error);

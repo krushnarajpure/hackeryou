@@ -51,7 +51,7 @@ export default function PopularPostsSidebar({ title = 'Popular' }) {
             <Link key={article.id} to={`/articles/${article.id}`}>
               <img
                 src={article.image}
-                alt=""
+                alt={`${article.title} - Popular article`}
                 loading="lazy"
                 onError={(event) => {
                   if (event.currentTarget.dataset.fallback !== 'true') {
@@ -62,7 +62,7 @@ export default function PopularPostsSidebar({ title = 'Popular' }) {
               />
               <div>
                 <strong>{article.title}</strong>
-                <time><Clock3 size={12} aria-hidden="true" />{article.date}</time>
+                <time style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock3 size={12} aria-hidden="true" />{article.date}</time>
               </div>
             </Link>
           ))}

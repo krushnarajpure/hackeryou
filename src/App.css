@@ -4968,6 +4968,20 @@ html body .desktop-dropdown-menu a:hover {
   background: #292927;
 }
 
+.category-page-shell .reference-news-ticker.reference-news-ticker-contained {
+  display: block;
+}
+
+.category-page-shell .reference-news-ticker-inner {
+  width: min(1200px, calc(100% - 32px));
+  height: 100%;
+  display: grid;
+  grid-template-columns: 89px minmax(0, 1fr);
+  margin-inline: auto;
+  padding-left: 15px;
+  box-sizing: border-box;
+}
+
 .category-page-shell .reference-news-label {
   height: 39px;
   background: #07810b;
@@ -5024,6 +5038,15 @@ html body .desktop-dropdown-menu a:hover {
   color: #777;
   font-size: 11px;
   line-height: 21px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.category-page-shell .archive-breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .category-page-shell .archive-breadcrumb a {
@@ -5040,8 +5063,9 @@ html body .desktop-dropdown-menu a:hover {
 
 .category-page-shell .category-archive-heading p {
   margin: 0;
-  color: #888;
+  color: #555;
   font-size: 14px;
+  font-weight: 500;
   line-height: 21px;
 }
 
@@ -5133,6 +5157,10 @@ html body .desktop-dropdown-menu a:hover {
   margin: 0 0 34px;
 }
 
+.category-page-shell .category-archive-social-links {
+  justify-content: center;
+}
+
 .category-page-shell .category-social-links a {
   width: 40px;
   height: 40px;
@@ -5142,6 +5170,33 @@ html body .desktop-dropdown-menu a:hover {
 .category-page-shell .category-social-links svg {
   width: 20px;
   height: 20px;
+}
+
+.category-page-shell .category-archive-social-links .archive-social-facebook::before {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  content: "";
+}
+
+.category-page-shell .category-archive-social-links .archive-social-facebook svg {
+  position: relative;
+  z-index: 1;
+}
+
+.category-page-shell .category-archive-social-links .archive-social-facebook svg path {
+  fill: #1877f2;
+}
+
+.category-page-shell .archive-social-x {
+  background: #000;
+}
+
+.category-page-shell .category-archive-social-links .archive-social-x svg {
+  fill: currentColor;
+  stroke: none;
 }
 
 
@@ -5353,6 +5408,10 @@ html body .desktop-dropdown-menu a:hover {
   .category-page-shell .category-social-links {
     justify-content: flex-start;
     margin-bottom: 14px;
+  }
+
+  .category-page-shell .reference-news-ticker-inner {
+    padding-left: 0;
   }
 }
 

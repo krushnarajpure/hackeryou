@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-export default function NewsTicker({ items = [], label = 'LATEST' }) {
+export default function NewsTicker({ items = [], label = 'LATEST', containerLabel = false }) {
   const [titles, setTitles] = useState(items)
   const [error, setError] = useState('')
   const [offset, setOffset] = useState(0)
@@ -30,8 +30,8 @@ export default function NewsTicker({ items = [], label = 'LATEST' }) {
     ? titles.map((_, index) => titles[(index + offset) % titles.length])
     : titles
 
-  return (
-    <div className="reference-news-ticker" role="region" aria-label="ताजे लेख">
+  const tickerContent = (
+    <>
       <div className="reference-news-label">{label}</div>
       <div className="reference-news-track">
         <div className="reference-news-items" aria-live="polite">
@@ -47,6 +47,12 @@ export default function NewsTicker({ items = [], label = 'LATEST' }) {
           <button type="button" aria-label="पुढील बातमी" disabled={!titles.length} onClick={() => setOffset((value) => (value + 1) % titles.length)}>›</button>
         </div>
       </div>
+    </>
+  )
+
+  return (
+    <div className={`reference-news-ticker${containerLabel ? ' reference-news-ticker-contained' : ''}`} role="region" aria-label="ताजे लेख">
+      {containerLabel ? <div className="reference-news-ticker-inner">{tickerContent}</div> : tickerContent}
     </div>
   )
 }

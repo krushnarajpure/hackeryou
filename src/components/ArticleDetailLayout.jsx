@@ -78,7 +78,7 @@ export default function ArticleDetailLayout({
                   <a href={item.to || '#'} key={item.title}>
                     <img
                       src={item.image}
-                      alt={item.title}
+                      alt={`${item.title} - Related article`}
                       onError={(event) => {
                         if (event.currentTarget.dataset.fallback !== 'true') {
                           event.currentTarget.dataset.fallback = 'true'

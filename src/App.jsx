@@ -10,6 +10,7 @@ import { ArticleHeader } from './components/ArticleHeader'
 import ArticleAuthor, { PUBLIC_AUTHOR_NAME } from './components/ArticleAuthor'
 import ArticleDetailLayout from './components/ArticleDetailLayout'
 import PopularPostsSidebar from './components/PopularPostsSidebar'
+import SeoHead, { SITE_URL } from './components/SeoHead'
 import { normalizeWebsiteSettings, useSetWebsiteSettings, useWebsiteSettings } from './context/websiteSettings'
 import { WebsiteSettingsProvider } from './context/WebsiteSettingsContext'
 import DOMPurify from 'dompurify'
@@ -69,8 +70,11 @@ function mapArticleRecord(article) {
     tag: article.category || 'लेख',
     date: article.publicationDate ? new Date(article.publicationDate).toLocaleDateString('mr-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Date unavailable',
     publicationDate: article.publicationDate,
+    updatedAt: article.updatedAt,
     createdAt: article.createdAt,
     image: article.featuredImage || article.ogImage || article.image || logoUrl,
+    schemaAuthorName: article.author?.name || article.authorName || PUBLIC_AUTHOR_NAME,
+    schemaCategory: article.category,
     excerpt: article.excerpt || article.subtitle || '',
     subtitle: article.subtitle || '',
     content: article.content,
@@ -649,7 +653,7 @@ function Header() {
           </div>
         </div>
       </header>
-      <NewsTicker label={isCategoryArchivePage || isHomePage ? 'नवीन पोस्ट्स' : undefined} />
+      <NewsTicker label={isCategoryArchivePage || isHomePage ? 'नवीन पोस्ट्स' : undefined} containerLabel={isCategoryArchivePage} />
       {open && (
         <div className="menu-overlay" role="presentation" onClick={() => setOpen(false)}>
           <div className="mobile-menu" id="mobile-primary-menu" role="dialog" aria-modal="true" aria-label="मुख्य नेव्हिगेशन" onClick={(event) => event.stopPropagation()}>
@@ -776,6 +780,9 @@ function BrandSocialIcon({ network }) {
   if (network === 'facebook') {
     return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 21v-8h2.7l.4-3h-3.1V8.1c0-.9.3-1.6 1.6-1.6h1.7V3.8c-.3 0-1.3-.1-2.5-.1-2.4 0-4.1 1.5-4.1 4.2V10H7.5v3h2.7v8z" /></svg>
   }
+  if (network === 'x') {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3L12 14.6 5.6 22H2.4l7.3-8.4L1.8 2h6.5l4.4 6.8L18.9 2Zm-1.1 18h1.7L7.2 3.9H5.4L17.8 20Z" /></svg>
+  }
   if (network === 'youtube') {
     return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="4" /><path d="m10 9 5 3-5 3z" /></svg>
   }
@@ -785,11 +792,20 @@ function BrandSocialIcon({ network }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.6a8 8 0 0 1-11.8 7l-4.2 1.1 1.1-4.1A8 8 0 1 1 20 11.6Z" /><path d="M9 8.5c.2-.5.4-.5.7-.5h.5c.2 0 .4.1.5.4l.7 1.7c.1.2.1.4-.1.6l-.5.6c-.2.2-.2.4 0 .6.4.7 1 1.2 1.7 1.6.2.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l1.6.8c.2.1.3.3.3.5 0 .4-.2 1.1-.7 1.5-.5.4-1.1.6-1.8.4-1-.2-2.1-.8-3.1-1.7-1.1-1-1.9-2.2-2.1-3.2-.2-.9.2-1.8.6-2.3Z" /></svg>
 }
 
-function SiteSocialLinks({ className = '' }) {
+function SiteSocialLinks({ className = '', categoryArchive = false }) {
   const settings = useWebsiteSettings()
+  const links = categoryArchive
+    ? [
+        { key: 'facebook', label: 'Facebook', to: settings.social.facebook, className: 'archive-social-facebook' },
+        { key: 'x', label: 'X', to: 'https://x.com/', className: 'archive-social-x' },
+        { key: 'youtube', label: 'YouTube', to: settings.social.youtube, className: 'archive-social-youtube' },
+        { key: 'instagram', label: 'Instagram', to: settings.social.instagram, className: 'archive-social-instagram' },
+        { key: 'whatsapp', label: 'WhatsApp', to: settings.whatsappUrl, className: 'archive-social-whatsapp' }
+      ]
+    : getOfficialSocialLinks(settings)
   return (
     <div className={`category-social-links ${className}`.trim()} aria-label="Social media">
-      {getOfficialSocialLinks(settings).map(({ key, label, to, className: linkClassName }) => (
+      {links.map(({ key, label, to, className: linkClassName }) => (
         <SiteMenuLink key={key} to={to} className={linkClassName} aria-label={label} title={label}>
           <BrandSocialIcon network={key} />
         </SiteMenuLink>
@@ -1429,13 +1445,81 @@ function CategoryArchive({ categoryName = '' } = {}) {
   const categorySubtitle = categoryName
     ? 'CMEGP, business loans आणि उद्योजकांसाठी आर्थिक मार्गदर्शन'
     : slug.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+  useEffect(() => {
+    if (typeof categoryTitle !== 'string') return
+    const categoryNames = {
+      'Business Loans': { title: 'व्यवसाय कर्ज आणि आर्थिक मार्गदर्शन', description: 'CMEGP, व्यवसाय कर्ज, small business loan आणि उद्योजकांना उपलब्ध सरकारी व आर्थिक सहाय्य याबद्दल मराठी माहिती वाचा.' },
+      entrepreneurship: { title: 'उद्योजकता आणि नवीन व्यवसाय कल्पना', description: 'नवीन व्यवसाय कल्पना, कमी गुंतवणुकीत उद्योग आणि Small Business Ideas in Marathi या उद्योजकता लेख संग्रहात वाचा.' },
+      'sarkari-yojana': { title: 'सरकारी योजना महाराष्ट्र उद्योजकांसाठी', description: 'Government Schemes for Entrepreneurs आणि महाराष्ट्रातील सरकारी योजना, पात्रता आणि अर्ज माहिती या category मध्ये वाचा.' },
+      technology: { title: 'तंत्रज्ञान आणि उद्योग व्यवसाय माहिती', description: 'महाराष्ट्रातील तंत्रज्ञान, नवीन उद्योग व्यवसाय आणि digital Business Opportunities यांचे मराठी लेख वाचा.' },
+      'farming-business': { title: 'शेती उद्योग आणि महाराष्ट्र व्यवसाय संधी', description: 'शेती उद्योग, कमी गुंतवणुकीत ग्रामीण व्यवसाय आणि Maharashtra Business Opportunities याबद्दल माहिती वाचा.' },
+      'personality-development': { title: 'स्वतःचा विकास आणि उद्योजक Skill', description: 'व्यवसायासाठी personality development, leadership आणि व्यक्तिमत्त्व विकासाचे मराठी लेख वाचा.' }
+    }
+    const fallbackTitle = `${categoryTitle} लेख आणि व्यवसाय मार्गदर्शन`
+    const fallbackDescription = `${categoryTitle} category मधील नवीन व्यवसाय कल्पना, उद्योग व्यवसाय माहिती आणि Maharashtra Business Opportunities मराठीत वाचा.`
+    const metadata = categoryNames[typeof slug === 'string' ? slug : ''] || {
+      title: fallbackTitle,
+      description: fallbackDescription
+    }
+    const title = `${metadata.title} | Express Udyojak`
+    const canonical = categoryName
+      ? `${SITE_URL}/business-loans`
+      : `${SITE_URL}/category/${encodeURIComponent(String(slug).replace(/\/+$/, ''))}`
+    document.title = title
+
+    const ensureMeta = (name, content, property = false) => {
+      if (!content) return
+      const selector = property ? `meta[property="${name}"]` : `meta[name="${name}"]`
+      let meta = document.head.querySelector(selector)
+      if (!meta) {
+        meta = document.createElement('meta')
+        meta.setAttribute(property ? 'property' : 'name', name)
+        document.head.appendChild(meta)
+      }
+      meta.setAttribute('content', content)
+    }
+    ensureMeta('description', metadata.description)
+    ensureMeta('robots', 'index,follow,max-image-preview:large')
+    ensureMeta('og:title', title, true)
+    ensureMeta('og:description', metadata.description, true)
+    ensureMeta('og:type', 'website', true)
+    ensureMeta('og:url', canonical, true)
+    ensureMeta('twitter:card', 'summary_large_image')
+    ensureMeta('twitter:title', title)
+    ensureMeta('twitter:description', metadata.description)
+
+    let canonicalLink = document.head.querySelector('link[rel="canonical"]')
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link')
+      canonicalLink.setAttribute('rel', 'canonical')
+      document.head.appendChild(canonicalLink)
+    }
+    canonicalLink.setAttribute('href', canonical)
+
+    let breadcrumbSchema = document.head.querySelector('script[data-category-breadcrumb]')
+    if (!breadcrumbSchema) {
+      breadcrumbSchema = document.createElement('script')
+      breadcrumbSchema.type = 'application/ld+json'
+      breadcrumbSchema.setAttribute('data-category-breadcrumb', 'true')
+      document.head.appendChild(breadcrumbSchema)
+    }
+    breadcrumbSchema.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'मुख्यपृष्ठ', item: `${SITE_URL}/` },
+        { '@type': 'ListItem', position: 2, name: categoryTitle, item: canonical }
+      ]
+    })
+    return () => breadcrumbSchema.remove()
+  }, [categoryTitle, slug])
   return <>
     <section className="category-archive">
       <div className="container category-archive-layout">
         <main className="category-archive-main">
           <div className="category-archive-panel">
             <header className="category-archive-heading">
-              <div className="archive-breadcrumb"><Link to="/"><Home size={12} aria-hidden="true" />Home</Link><ChevronRight size={13} /><span>{categoryTitle}</span></div>
+              <div className="archive-breadcrumb"><Link to="/"><Home size={12} aria-hidden="true" />Home</Link><span aria-hidden="true">/</span><span>{categoryTitle}</span></div>
               <h1>{categoryTitle}</h1>
               <p>{categorySubtitle}</p>
             </header>
@@ -1509,7 +1593,7 @@ function CategoryArchive({ categoryName = '' } = {}) {
           </div>
         </main>
         <aside className="category-archive-sidebar">
-          <SiteSocialLinks />
+          <SiteSocialLinks className="category-archive-social-links" categoryArchive />
           <PopularPostsSidebar />
         </aside>
       </div>
@@ -1962,6 +2046,7 @@ function CmegpLoanVideo() {
 function ArticleDetails() {
   const { id } = useParams()
   const articleState = useLiveArticles(0, 4)
+  const liveCategories = useLiveCategories()
   const detailState = useLiveItem(`/api/articles/slug/${encodeURIComponent(id)}`, 'article')
   const listedArticle = articleState.articles.find((item) => String(item.id) === String(id))
   const article = detailState.item ? mapArticleRecord(detailState.item) : listedArticle
@@ -2040,15 +2125,36 @@ function ArticleDetails() {
   useEffect(() => {
     if (!article) {
       document.title = detailState.status === 'not-found'
-        ? 'लेख सापडला नाही | Marathi Udyojak'
+        ? 'लेख सापडला नाही | Express Udyojak'
         : detailState.status === 'error'
-          ? 'लेख उपलब्ध नाही | Marathi Udyojak'
-          : 'लेख लोड होत आहे | Marathi Udyojak'
+          ? 'लेख उपलब्ध नाही | Express Udyojak'
+          : 'लेख लोड होत आहे | Express Udyojak'
+      const robots = document.head.querySelector('meta[name="robots"]')
+      if (robots) robots.setAttribute('content', 'noindex,nofollow')
       return
     }
-    const title = article.seoTitle || article.title
-    const description = article.seoDescription || (typeof article.content === 'string' ? article.content.replace(/<[^>]+>/g, '').slice(0, 160) : article.title)
-    document.title = `${title} | Marathi Udyojak`
+    const title = article.seoTitle || (article.category && article.category !== 'General'
+      ? `${article.title} | ${article.category} | Express Udyojak`
+      : `${article.title} | Express Udyojak`)
+    const contentText = typeof article.content === 'string'
+      ? article.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      : ''
+    const description = article.seoDescription
+      || (contentText
+        ? `${contentText.slice(0, 145).replace(/\s+\S*$/, '')}…`
+        : `${article.title} - Express Udyojak वर मराठीमध्ये वाचा`)
+    const canonicalUrl = `${SITE_URL}/articles/${article.id || article.slug}`
+    const schemaCategory = article.schemaCategory || ''
+    const category = liveCategories.find((item) => item.name === schemaCategory || item.slug === schemaCategory)
+    const categoryPath = category
+      ? category.slug === 'business-loans'
+        ? '/business-loans'
+        : `/category/${encodeURIComponent(category.slug)}`
+      : '/articles'
+    const imageUrl = /^https?:\/\//i.test(article.ogImage || article.image || '')
+      ? (article.ogImage || article.image)
+      : `${SITE_URL}${(article.ogImage || article.image || '/favicon.svg').startsWith('/') ? '' : '/'}${article.ogImage || article.image || 'favicon.svg'}`
+    document.title = article.seoTitle || `${title} | Express Udyojak`
     const ensureMeta = (name, content, property = false) => {
       if (!content) return
       const selector = property ? `meta[property="${name}"]` : `meta[name="${name}"]`
@@ -2065,16 +2171,21 @@ function ArticleDetails() {
     ensureMeta('keywords', (article.keywords || []).join(', '))
     ensureMeta('og:title', title, true)
     ensureMeta('og:description', description, true)
-    ensureMeta('og:image', article.ogImage || article.image, true)
-    ensureMeta('og:url', article.canonicalUrl || window.location.href, true)
+    ensureMeta('og:image', imageUrl, true)
+    ensureMeta('og:url', canonicalUrl, true)
     ensureMeta('og:type', 'article', true)
+    ensureMeta('twitter:card', 'summary_large_image')
+    ensureMeta('twitter:title', document.title)
+    ensureMeta('twitter:description', description)
+    ensureMeta('twitter:image', imageUrl)
+    ensureMeta('robots', 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1')
     let canonical = document.head.querySelector('link[rel="canonical"]')
     if (!canonical) {
       canonical = document.createElement('link')
       canonical.setAttribute('rel', 'canonical')
       document.head.appendChild(canonical)
     }
-    canonical.setAttribute('href', article.canonicalUrl || window.location.href)
+    canonical.setAttribute('href', canonicalUrl)
 
     let schema = document.head.querySelector('script[data-marathi-udyojak-article]')
     if (!schema) {
@@ -2086,21 +2197,55 @@ function ArticleDetails() {
     schema.textContent = JSON.stringify({
       '@context': 'https://schema.org',
       '@type': 'Article',
-      headline: title,
+      headline: article.title,
       description,
-      image: article.ogImage || article.image,
+      image: imageUrl,
       datePublished: article.publicationDate || undefined,
-      author: { '@type': 'Organization', name: PUBLIC_AUTHOR_NAME },
-      publisher: { '@type': 'Organization', name: PUBLIC_AUTHOR_NAME },
-      mainEntityOfPage: article.canonicalUrl || window.location.href,
+      dateModified: article.updatedAt || article.publicationDate || undefined,
+      author: { '@type': 'Person', name: article.schemaAuthorName || PUBLIC_AUTHOR_NAME },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Express Udyojak',
+        logo: { '@type': 'ImageObject', url: new URL(expressLogoUrl, SITE_URL).href }
+      },
+      inLanguage: 'mr',
+      mainEntityOfPage: canonicalUrl,
     })
-  }, [article, detailState.status])
+
+    let breadcrumbSchema = document.head.querySelector('script[data-marathi-udyojak-breadcrumb]')
+    if (!breadcrumbSchema) {
+      breadcrumbSchema = document.createElement('script')
+      breadcrumbSchema.type = 'application/ld+json'
+      breadcrumbSchema.setAttribute('data-marathi-udyojak-breadcrumb', 'true')
+      document.head.appendChild(breadcrumbSchema)
+    }
+    breadcrumbSchema.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'मुख्यपृष्ठ', item: `${SITE_URL}/` },
+        { '@type': 'ListItem', position: 2, name: schemaCategory || 'लेख', item: `${SITE_URL}${categoryPath}` },
+        { '@type': 'ListItem', position: 3, name: article.title, item: canonicalUrl }
+      ]
+    })
+    return () => {
+      schema.remove()
+      breadcrumbSchema.remove()
+    }
+  }, [article, detailState.status, liveCategories])
   if (!article && detailState.status === 'loading') return <div className="data-loading" role="status">Article लोड होत आहे…</div>
   if (!article && detailState.status === 'error') return <section className="section"><div className="container"><div className="data-notice" role="alert">{detailState.error}</div><Link to="/articles">सर्व लेख पाहा</Link></div></section>
   if (!article) return <section className="section"><div className="container"><div className="empty-state"><h1>लेख सापडला नाही</h1><p>हा लेख प्रकाशित नाही किंवा URL उपलब्ध नाही.</p><Link to="/articles">सर्व लेख पाहा</Link></div></div></section>
 
   const subtitle = plainTextExcerpt(article.subtitle || article.excerpt || '')
   const articleContentDocument = new DOMParser().parseFromString(DOMPurify.sanitize(article.content || ''), 'text/html')
+  articleContentDocument.querySelectorAll('img').forEach((image, index) => {
+    if (!image.getAttribute('alt')?.trim()) {
+      image.setAttribute('alt', index === 0
+        ? `${article.title} - featured image`
+        : `${article.title} - ${article.category || 'व्यवसाय'} संबंधित चित्र`)
+    }
+  })
   const firstContentBlock = articleContentDocument.body.firstElementChild
   const normalizeArticleHeading = (value) => String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
   const isTitleBlock = firstContentBlock
@@ -4052,13 +4197,13 @@ function AppContent() {
   const isCategoryArchiveRoute = /^\/category\/[^/]+\/?$/.test(location.pathname) || /^\/business-loans\/?$/.test(location.pathname)
   const isInnerPage = !isHomeRoute && !isAdminRoute
   useEffect(() => {
-    if (settings.websiteName) document.title = settings.websiteName
     if (settings.design?.primaryColor) document.documentElement.style.setProperty('--green', settings.design.primaryColor)
     if (settings.design?.accentColor) document.documentElement.style.setProperty('--orange', settings.design.accentColor)
     if (settings.design?.backgroundColor) document.documentElement.style.setProperty('--page-bg', settings.design.backgroundColor)
   }, [settings])
   return (
     <div className={`${isHomeRoute ? 'home-page-shell' : ''}${isCategoryArchiveRoute ? ' category-page-shell' : ''}${isInnerPage ? ' inner-page-shell' : ''}`.trim() || undefined}>
+      <SeoHead />
       {!isAdminRoute && <Header />}
       <main>
         <Routes>

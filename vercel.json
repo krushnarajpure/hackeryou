@@ -1,12 +1,24 @@
 {
   "rewrites": [
     {
+      "source": "/robots.txt",
+      "destination": "https://hackeryou.onrender.com/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://hackeryou.onrender.com/sitemap.xml"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://hackeryou.onrender.com/api/:path*"
     },
     {
       "source": "/uploads/:path*",
       "destination": "https://hackeryou.onrender.com/uploads/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
