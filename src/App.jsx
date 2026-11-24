@@ -1435,7 +1435,7 @@ function CategoryArchive({ categoryName = '' } = {}) {
         <main className="category-archive-main">
           <div className="category-archive-panel">
             <header className="category-archive-heading">
-              <div className="archive-breadcrumb"><Link to="/">Home</Link><ChevronRight size={13} /><span>{categoryTitle}</span></div>
+              <div className="archive-breadcrumb"><Link to="/"><Home size={12} aria-hidden="true" />Home</Link><ChevronRight size={13} /><span>{categoryTitle}</span></div>
               <h1>{categoryTitle}</h1>
               <p>{categorySubtitle}</p>
             </header>
