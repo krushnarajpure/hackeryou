@@ -30,16 +30,17 @@ export default function GoogleAnalytics() {
   useEffect(() => {
     if (!measurementId || !window.gtag) return
 
-    const pagePath = `${location.pathname}${location.search}${location.hash}`
-    if (lastPageView.current === pagePath) return
-    lastPageView.current = pagePath
+    const pagePath = location.pathname
+    const pageKey = `${location.pathname}${location.search}`
+    if (lastPageView.current === pageKey) return
+    lastPageView.current = pageKey
 
     window.gtag('event', 'page_view', {
       page_path: pagePath,
-      page_location: window.location.href,
+      page_location: `${window.location.origin}${pagePath}`,
       page_title: document.title
     })
-  }, [location.hash, location.pathname, location.search, measurementId])
+  }, [location.pathname, location.search, measurementId])
 
   return null
 }

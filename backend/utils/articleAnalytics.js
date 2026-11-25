@@ -18,7 +18,7 @@ async function withArticleAnalytics(articles) {
 
   return records.map((article) => {
     const approvedComments = Array.isArray(article.comments)
-      ? article.comments.filter((comment) => comment.isApproved !== false).length
+      ? article.comments.filter((comment) => comment.status ? comment.status === 'approved' : comment.isApproved !== false).length
       : Number(article.commentCount) || 0;
     delete article.comments;
     article.commentCount = approvedComments;

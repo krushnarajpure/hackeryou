@@ -13,17 +13,18 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 const Media = require('../models/Media');
-const ArticleAnalytics = require('../models/ArticleAnalytics');
+const WebsitePageView = require('../models/WebsitePageView');
 
 exports.dashboard = async (_req, res) => {
-  const [users, businesses, pendingBusinesses, categories, ideas, schemes, articles, publishedArticles, draftArticles, pageViewSummary, enquiries, advertisements, payments] = await Promise.all([
+  const [users, businesses, pendingBusinesses, categories, ideas, schemes, articles, publishedArticles, draftArticles, pageViewSummary, commentSummary, enquiries, advertisements, payments] = await Promise.all([
     User.countDocuments(), Business.countDocuments(), Business.countDocuments({ approvalStatus: 'pending' }),
     Category.countDocuments(), Idea.countDocuments(), Scheme.countDocuments(), Article.countDocuments(),
     Article.countDocuments({ isPublished: true }), Article.countDocuments({ isPublished: false }),
-    ArticleAnalytics.aggregate([{ $group: { _id: null, value: { $sum: '$totalViews' } } }]),
+    WebsitePageView.aggregate([{ $group: { _id: null, value: { $sum: '$pageViews' } } }]),
+    Article.aggregate([{ $unwind: '$comments' }, { $count: 'value' }]),
     Enquiry.countDocuments({ status: 'new' }), Advertisement.countDocuments({ approvalStatus: 'pending' }), Payment.countDocuments()
   ]);
-  res.json({ statistics: { users, businesses, pendingBusinesses, categories, ideas, schemes, articles, publishedArticles, draftArticles, pageViews: pageViewSummary[0]?.value || 0, newEnquiries: enquiries, pendingAdvertisements: advertisements, payments } });
+  res.json({ statistics: { users, businesses, pendingBusinesses, categories, ideas, schemes, articles, publishedArticles, draftArticles, pageViews: pageViewSummary[0]?.value || 0, comments: commentSummary[0]?.value || 0, newEnquiries: enquiries, pendingAdvertisements: advertisements, payments } });
 };
 
 exports.getStorage = async (_req, res) => {

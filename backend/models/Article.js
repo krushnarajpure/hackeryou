@@ -25,7 +25,10 @@ const articleSchema = new mongoose.Schema({
     email: { type: String, trim: true, maxlength: 254 },
     website: { type: String, trim: true, maxlength: 500 },
     message: { type: String, required: true, trim: true, maxlength: 2000 },
+    articleTitle: { type: String, trim: true },
+    articleSlug: { type: String, trim: true },
     isApproved: { type: Boolean, default: true },
+    status: { type: String, enum: ['pending', 'approved', 'rejected'] },
     createdAt: { type: Date, default: Date.now }
   }],
   publicationDate: { type: Date, default: null },

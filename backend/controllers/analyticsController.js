@@ -1,10 +1,136 @@
 const Article = require('../models/Article');
 const ArticleAnalytics = require('../models/ArticleAnalytics');
 const ArticleVisitor = require('../models/ArticleVisitor');
+const WebsiteVisitor = require('../models/WebsiteVisitor');
+const WebsiteVisitorDay = require('../models/WebsiteVisitorDay');
+const WebsitePageView = require('../models/WebsitePageView');
 const Enquiry = require('../models/Enquiry');
 const Payment = require('../models/Payment');
 const BookOrder = require('../models/BookOrder');
 const escapeRegex = require('../utils/escapeRegex');
+const crypto = require('crypto');
+const { validationResult } = require('express-validator');
+
+const getIndiaDayKey = (date) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(date);
+
+const getRecentDayKeys = (today, count) => Array.from({ length: count }, (_, index) => {
+  const date = new Date(`${today}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - (count - index - 1));
+  return date.toISOString().slice(0, 10);
+});
+
+const isPrivilegedRole = (role) => ['admin', 'super_admin', 'content_editor', 'design_manager', 'viewer', 'analyst', 'store_manager'].includes(role);
+
+exports.trackPageView = async (req, res) => {
+  const userAgent = req.get('user-agent') || '';
+  if (isPrivilegedRole(req.user?.role) || !userAgent || /bot|crawler|spider|slurp|headless|preview|facebookexternalhit|whatsapp|curl|wget|python-requests|scrapy|phantomjs/i.test(userAgent)) {
+    res.json({ tracked: false });
+    return;
+  }
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) throw Object.assign(new Error(errors.array()[0].msg), { statusCode: 400 });
+  const { visitorId, path: pagePath, title = '' } = req.body || {};
+  if (pagePath.toLowerCase() === '/admin' || pagePath.toLowerCase().startsWith('/admin/')) {
+    res.json({ tracked: false });
+    return;
+  }
+  if (!process.env.JWT_SECRET) throw Object.assign(new Error('Analytics tracking is unavailable'), { statusCode: 503 });
+
+  const now = new Date();
+  const day = getIndiaDayKey(now);
+  const visitorHash = crypto.createHmac('sha256', process.env.JWT_SECRET).update(visitorId).digest('hex');
+  const ignoreDuplicateUpsert = (update) => update.catch((error) => {
+    if (error.code !== 11000) throw error;
+  });
+  const pageViewUpdate = async () => {
+    const filter = { day, path: pagePath };
+    const update = {
+      $inc: { pageViews: 1 },
+      $set: { title: String(title).trim().slice(0, 200) },
+      $setOnInsert: filter
+    };
+    try {
+      await WebsitePageView.updateOne(filter, update, { upsert: true });
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      await WebsitePageView.updateOne(filter, {
+        $inc: { pageViews: 1 },
+        $set: { title: String(title).trim().slice(0, 200) }
+      });
+    }
+  };
+  await Promise.all([
+    ignoreDuplicateUpsert(WebsiteVisitor.updateOne(
+      { visitorHash },
+      { $setOnInsert: { visitorHash, firstSeenAt: now } },
+      { upsert: true }
+    )),
+    ignoreDuplicateUpsert(WebsiteVisitorDay.updateOne(
+      { visitorHash, day },
+      { $setOnInsert: { visitorHash, day, firstSeenAt: now } },
+      { upsert: true }
+    )),
+    pageViewUpdate()
+  ]);
+  res.json({ tracked: true });
+};
+
+const getWebsiteMetrics = async () => {
+  const today = getIndiaDayKey(new Date());
+  const days = getRecentDayKeys(today, 30);
+  const firstDay = days[0];
+  const sevenDayStart = days[23];
+  const [totalVisitors, visitorDays, pageViewMetrics, totalComments] = await Promise.all([
+    WebsiteVisitor.countDocuments(),
+    WebsiteVisitorDay.aggregate([
+      { $match: { day: { $gte: firstDay, $lte: today } } },
+      { $group: { _id: '$day', visitors: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]),
+    WebsitePageView.aggregate([
+      {
+        $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: '$pageViews' } } }],
+          daily: [
+            { $match: { day: { $gte: firstDay, $lte: today } } },
+            { $group: { _id: '$day', pageViews: { $sum: '$pageViews' } } },
+            { $sort: { _id: 1 } }
+          ],
+          topPages: [
+            { $group: { _id: '$path', title: { $last: '$title' }, pageViews: { $sum: '$pageViews' } } },
+            { $sort: { pageViews: -1, _id: 1 } },
+            { $limit: 10 }
+          ]
+        }
+      }
+    ]),
+    Article.aggregate([{ $unwind: '$comments' }, { $count: 'total' }])
+  ]);
+  const visitorByDay = new Map(visitorDays.map((point) => [point._id, point.visitors]));
+  const pageViewReport = pageViewMetrics[0] || { totals: [], daily: [], topPages: [] };
+  const pageViewsByDay = new Map(pageViewReport.daily.map((point) => [point._id, point.pageViews]));
+  const sumBetween = (counts, start, end) => days
+    .filter((day) => day >= start && day <= end)
+    .reduce((sum, day) => sum + (counts.get(day) || 0), 0);
+
+  return {
+    totalVisitors,
+    totalPageViews: pageViewReport.totals[0]?.total || 0,
+    todayVisitors: visitorByDay.get(today) || 0,
+    todayPageViews: pageViewsByDay.get(today) || 0,
+    last7DaysVisitors: sumBetween(visitorByDay, sevenDayStart, today),
+    last30DaysVisitors: sumBetween(visitorByDay, firstDay, today),
+    totalComments: totalComments[0]?.total || 0,
+    dailyVisitors: days.map((day) => ({ day, visitors: visitorByDay.get(day) || 0 })),
+    topPages: pageViewReport.topPages.map((page) => ({ path: page._id, title: page.title, pageViews: page.pageViews }))
+  };
+};
 
 const getDateRange = (query) => {
   const to = query.to ? new Date(query.to) : new Date();
@@ -78,12 +204,15 @@ exports.overview = async (req, res) => {
   const views = totalViews[0]?.value || 0;
   const visitorCount = uniqueVisitors[0]?.value || 0;
   const hasArticleAnalytics = views > 0 || visitorCount > 0;
+  const website = await getWebsiteMetrics();
+  const { dailyVisitors: websiteDailyVisitors, topPages: websiteTopPages, ...websiteMetrics } = website;
   const paymentSummary = paidPaymentSummary[0] || { count: 0, amountPaise: 0 };
   const bookSummary = paidBookSummary[0] || { count: 0, amountPaise: 0 };
   res.json({
     range: { from, to },
     hasArticleAnalytics,
     metrics: {
+      ...websiteMetrics,
       articleViews: hasArticleAnalytics ? views : null,
       uniqueArticleVisitors: hasArticleAnalytics ? visitorCount : null,
       publishedArticles,
@@ -95,15 +224,17 @@ exports.overview = async (req, res) => {
       verifiedBookRevenuePaise: bookSummary.amountPaise
     },
     charts: {
+      dailyVisitors: websiteDailyVisitors,
+      topPages: websiteTopPages,
       firstSeenUniqueVisitors: dailyVisitors,
       topArticles,
       viewsByCategory,
       bookSalesTrend
     },
-    unavailableMetrics: ['All-page sessions', 'Bounce rate', 'Engagement time', 'Traffic source', 'Device breakdown'],
+    unavailableMetrics: ['Sessions', 'Bounce rate', 'Engagement time', 'Traffic source', 'Device breakdown'],
     trackingNote: hasArticleAnalytics
-      ? 'Article views are lifetime counters. Unique visitors are distinct first-party visitor IDs across articles; the selected date range applies only to first-seen visitor trend.'
-      : 'No article analytics data yet. Public article-view tracking is available; page-wide sessions and engagement are not collected.'
+      ? 'Website visitors are counted using anonymous first-party browser IDs; page views count route loads. Article view counters are separate lifetime totals. No IP addresses or page query strings are stored.'
+      : 'Website visitor/page-view tracking starts from deployment. Article view counters are separate. No IP addresses or page query strings are stored.'
   });
 };
 

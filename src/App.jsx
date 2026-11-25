@@ -12,12 +12,14 @@ import ArticleDetailLayout from './components/ArticleDetailLayout'
 import PopularPostsSidebar from './components/PopularPostsSidebar'
 import SeoHead, { SITE_URL } from './components/SeoHead'
 import GoogleAnalytics from './components/GoogleAnalytics'
+import WebsiteAnalytics from './components/WebsiteAnalytics'
 import { normalizeWebsiteSettings, useSetWebsiteSettings, useWebsiteSettings } from './context/websiteSettings'
 import { WebsiteSettingsProvider } from './context/WebsiteSettingsContext'
 import DOMPurify from 'dompurify'
 import logoUrl from './image/fallback-logo.svg'
 import expressLogoUrl from './image/express-udyojak-logo.png'
 import officialWebsiteSettings from '../shared/official-website-settings.json'
+import getVisitorId from './utils/visitorId'
 import './App.css'
 
 function mapBusinessIdea(idea) {
@@ -109,19 +111,6 @@ function ArticleCardMetadata({ article, className = '' }) {
       <span><Eye size={12} aria-hidden="true" />{totalViews.toLocaleString('en-US')} Views</span>
     </div>
   )
-}
-
-function getArticleVisitorId() {
-  const storageKey = 'marathiUdyojakVisitorId'
-  try {
-    const storedId = window.localStorage.getItem(storageKey)
-    if (storedId) return storedId
-    const visitorId = window.crypto.randomUUID()
-    window.localStorage.setItem(storageKey, visitorId)
-    return visitorId
-  } catch {
-    return window.crypto.randomUUID()
-  }
 }
 
 async function requestJson(path, signal) {
@@ -1779,14 +1768,14 @@ const FOOTER_CONTENT_PAGES = {
   },
   '/privacy-policy': {
     title: 'Privacy Policy',
-    updated: '24 नोव्हेंबर 2026',
+    updated: '25 नोव्हेंबर 2026',
     notice: 'हा सामान्य माहितीचा मसुदा आहे, कायदेशीर सल्ला नाही. प्रकाशनापूर्वी वेबसाइट मालकाने आणि लागू असल्यास कायदेशीर तज्ज्ञाने पुनरावलोकन करावे.',
     sections: [
       { heading: 'गोपनीयता धोरण – एक्सप्रेस उद्योजक', paragraphs: ['एक्सप्रेस उद्योजक आपल्या वेबसाइटला भेट देणाऱ्या वापरकर्त्यांच्या गोपनीयतेचा आदर करते. वेबसाइट वापरताना मिळू शकणारी माहिती, तिचा वापर आणि आमच्याशी संपर्क साधण्याची पद्धत या धोरणात दिली आहे.'] },
       { heading: '1. संमती', paragraphs: ['वेबसाइट वापरण्यापूर्वी हे धोरण वाचा. या धोरणाशी सहमत नसल्यास वेबसाइटचा वापर थांबवू शकता.'] },
-      { heading: '2. आम्ही कोणती माहिती गोळा करू शकतो?', bullets: ['संपर्क, व्यवसाय नोंदणी, कथा, कल्पना, अभिप्राय किंवा खात्याच्या फॉर्ममध्ये तुम्ही स्वतः दिलेली माहिती—उदा. नाव, ईमेल, मोबाईल आणि संदेशातील तपशील.', 'लॉगिन किंवा नोंदणीदरम्यान खाते ओळख आणि प्रमाणीकरणासाठी दिलेली माहिती.', 'लेख वाचताना लेख-दृश्य मोजण्यासाठी वापरला जाणारा प्रथम-पक्ष अभ्यागत ओळखकर्ता. साइट हा ओळखकर्ता ब्राउझरच्या localStorage मध्ये ठेवते; हे page-wide session analytics नाही.', 'वेबसाइट चालवण्यासाठी वापरल्या जाणाऱ्या होस्टिंग किंवा तांत्रिक सेवांकडून त्यांच्या configuration नुसार मिळू शकणारी निदान/सुरक्षा माहिती.'] },
-      { heading: '3. माहितीचा वापर', bullets: ['वेबसाइट चालवणे, सुरक्षित ठेवणे आणि त्रुटी शोधणे.', 'वापरकर्त्यांच्या चौकशीला उत्तर देणे आणि सबमिट केलेले व्यवसाय, कथा किंवा इतर योगदान तपासणे.', 'खाते, नोंदणी, वेबसाइटवरील विनंती आणि संबंधित सुविधा चालवणे.', 'लेखांचे एकूण वाचन मोजणे आणि गैरवापर किंवा सुरक्षा समस्यांना प्रतिबंध करणे.', 'लागू कायदेशीर जबाबदाऱ्या पूर्ण करणे.'] },
-      { heading: '4. Cookies, स्थानिक संचयन आणि analytics', paragraphs: ['या प्रकल्पाच्या तपासलेल्या फ्रंटएंड कोडमध्ये cookies वाचणे/सेट करणे किंवा Google Analytics/Facebook Pixel सारखी तृतीय-पक्ष analytics सेवा आढळली नाही. लेख-दृश्य मोजण्यासाठी ब्राउझरमध्ये प्रथम-पक्ष अभ्यागत ओळखकर्ता localStorage मध्ये ठेवला जातो. लॉगिन सत्रासाठीची माहिती आणि पुस्तकांच्या कार्टमधील निवडही काही सुविधा चालवण्यासाठी browser localStorage मध्ये साठवली जाऊ शकते. ब्राउझर सेटिंग्जमधून localStorage नियंत्रित किंवा हटवल्यास काही सुविधा पुन्हा लॉगिन मागू शकतात किंवा जतन केलेला कार्ट डेटा काढला जाऊ शकतो.'] },
+      { heading: '2. आम्ही कोणती माहिती गोळा करू शकतो?', bullets: ['संपर्क, व्यवसाय नोंदणी, कथा, कल्पना, अभिप्राय किंवा खात्याच्या फॉर्ममध्ये तुम्ही स्वतः दिलेली माहिती—उदा. नाव, ईमेल, मोबाईल आणि संदेशातील तपशील.', 'लॉगिन किंवा नोंदणीदरम्यान खाते ओळख आणि प्रमाणीकरणासाठी दिलेली माहिती.', 'पृष्ठदृश्य आणि अद्वितीय भेटी मोजण्यासाठी वापरला जाणारा प्रथम-पक्ष अभ्यागत ओळखकर्ता. तो ब्राउझरच्या localStorage मध्ये राहतो आणि आमच्या analytics डेटाबेसमध्ये साठवण्यापूर्वी HMAC ने रूपांतरित केला जातो.', 'Leave a Reply द्वारे दिलेले नाव, ईमेल, ऐच्छिक वेबसाइट आणि संदेश; हे संदेश प्रशासकाच्या मंजुरीपर्यंत अप्रकाशित राहतात.', 'वेबसाइट चालवण्यासाठी वापरल्या जाणाऱ्या होस्टिंग किंवा तांत्रिक सेवांकडून त्यांच्या configuration नुसार मिळू शकणारी निदान/सुरक्षा माहिती.'] },
+      { heading: '3. माहितीचा वापर', bullets: ['वेबसाइट चालवणे, सुरक्षित ठेवणे आणि त्रुटी शोधणे.', 'वापरकर्त्यांच्या चौकशीला उत्तर देणे आणि सबमिट केलेले व्यवसाय, कथा किंवा इतर योगदान तपासणे.', 'खाते, नोंदणी, वेबसाइटवरील विनंती आणि संबंधित सुविधा चालवणे.', 'एकूण पृष्ठदृश्य/भेटी मोजणे, लेखांच्या टिप्पण्या नियंत्रित करणे आणि गैरवापर किंवा सुरक्षा समस्यांना प्रतिबंध करणे.', 'लागू कायदेशीर जबाबदाऱ्या पूर्ण करणे.'] },
+      { heading: '4. Cookies, स्थानिक संचयन आणि analytics', paragraphs: ['वेबसाइटवरील प्रथम-पक्ष analytics साठी ब्राउझरमध्ये एक यादृच्छिक अभ्यागत ओळखकर्ता localStorage मध्ये ठेवला जातो. आमचा analytics backend हा ओळखकर्ता HMAC-hash करून साठवतो; तो IP पत्ता किंवा पृष्ठाच्या query string साठवत नाही. Google Analytics 4 कॉन्फिगर असल्यास, GA4 ला page views आणि property मध्ये सक्षम केलेले scroll/outbound-click यांसारखे Enhanced Measurement events मिळू शकतात; Google ची गोपनीयता पद्धत व धोरणे स्वतंत्रपणे लागू होतात. लॉगिन सत्र आणि पुस्तकांच्या कार्टमधील निवडही काही सुविधा चालवण्यासाठी browser localStorage मध्ये साठवली जाऊ शकते. localStorage हटवल्यास काही सुविधा पुन्हा लॉगिन मागू शकतात किंवा जतन केलेला cart डेटा काढला जाऊ शकतो.'] },
       { heading: '5. तृतीय-पक्ष सेवा आणि पेमेंट', paragraphs: ['साइटवर उपलब्ध checkout वापरल्यास पेमेंट Razorpay द्वारे प्रक्रिया केले जाऊ शकते. पेमेंटची माहिती Razorpay कडे त्यांच्या अटी व गोपनीयता धोरणानुसार प्रक्रिया होते. वेबसाइटवर बाह्य सोशल मीडिया, सरकारी पोर्टल किंवा इतर संकेतस्थळांचे दुवे असू शकतात; त्या सेवांचे स्वतंत्र धोरण लागू होते.'] },
       { heading: '6. माहिती शेअर करणे', paragraphs: ['आम्ही वैयक्तिक माहिती विकण्याचा उद्देश ठेवत नाही. वेबसाइट, खाते, चौकशी किंवा पेमेंट सुविधा चालवण्यासाठी संबंधित सेवा पुरवठादारांकडून आवश्यक मर्यादेत माहिती प्रक्रिया होऊ शकते. कायद्याने आवश्यक असल्यास किंवा हक्क आणि सुरक्षा जपण्यासाठी आवश्यक असल्यास माहिती उघड केली जाऊ शकते.'] },
       { heading: '7. माहितीची सुरक्षा आणि साठवण', paragraphs: ['अनधिकृत प्रवेश, बदल, उघड होणे किंवा नष्ट होणे कमी करण्यासाठी योग्य तांत्रिक व प्रशासकीय उपाय वापरण्याचा प्रयत्न केला जातो. इंटरनेटवरील कोणतीही पद्धत पूर्णपणे सुरक्षित असल्याची हमी देता येत नाही. माहिती संबंधित उद्देशासाठी किंवा लागू कायदेशीर गरजेनुसार आवश्यक तेवढ्या काळासाठी ठेवली जाऊ शकते.'] },
@@ -2110,7 +2099,7 @@ function ArticleDetails() {
     fetch(`/api/articles/${encodeURIComponent(article.id)}/views`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ visitorId: getArticleVisitorId() }),
+      body: JSON.stringify({ visitorId: getVisitorId() }),
       signal: controller.signal
     })
       .then(async (response) => {
@@ -2956,6 +2945,7 @@ function CmsOverview({ statistics }) {
     ['Published Articles', statistics.publishedArticles ?? 0, 'publish'],
     ['Draft Articles', statistics.draftArticles ?? 0, 'draft'],
     ['Total Page Views', statistics.pageViews ?? 0, 'views'],
+    ['Total Comments', statistics.comments ?? 0, 'comments'],
     ['Total Users', statistics.users, 'users'],
     ['Total Categories', statistics.categories, 'category']
   ]
@@ -3741,6 +3731,13 @@ function AnalyticsAdmin({ token }) {
   if (!report) return <div className="cms-loading">Loading analytics…</div>
   const metrics = report.metrics
   const cards = [
+    ['Total website visitors', metrics.totalVisitors],
+    ['Total page views', metrics.totalPageViews],
+    ["Today's visitors", metrics.todayVisitors],
+    ["Today's page views", metrics.todayPageViews],
+    ['Visitors (last 7 days)', metrics.last7DaysVisitors],
+    ['Visitors (last 30 days)', metrics.last30DaysVisitors],
+    ['Total comments', metrics.totalComments],
     ['Tracked article views', metrics.articleViews],
     ['Unique article visitors', metrics.uniqueArticleVisitors],
     ['Published articles', metrics.publishedArticles],
@@ -3751,7 +3748,7 @@ function AnalyticsAdmin({ token }) {
     ['Verified book orders', metrics.verifiedBookOrders],
     ['Book revenue', metrics.verifiedBookRevenuePaise == null ? null : `₹${(metrics.verifiedBookRevenuePaise / 100).toLocaleString('en-IN')}`]
   ]
-  const dailyVisitors = report.charts.firstSeenUniqueVisitors || []
+  const dailyVisitors = report.charts.dailyVisitors || []
   const dailyMax = Math.max(1, ...dailyVisitors.map((point) => point.visitors))
   const bookSalesTrend = report.charts.bookSalesTrend || []
   const bookSalesMax = Math.max(1, ...bookSalesTrend.map((point) => point.revenuePaise))
@@ -3759,17 +3756,20 @@ function AnalyticsAdmin({ token }) {
   const topMax = Math.max(1, ...topArticles.map((article) => article.totalViews))
   return <div className="cms-analytics">
     <div className="cms-panel cms-analytics-toolbar">
-      <div><h2>Analytics Overview</h2><p>Verified records only; unavailable tracking is explicitly identified.</p></div>
-      <label>Date range<select value={range} onChange={(event) => setRange(event.target.value)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
+      <div><h2>Website Analytics</h2><p>Anonymous first-party visitor and page-view counts; no IP addresses or page query strings are stored.</p></div>
+      <label>Sales trend range<select value={range} onChange={(event) => setRange(event.target.value)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
     </div>
-    {!report.hasArticleAnalytics && <div className="cms-empty" role="status">No article analytics data yet. Public article-view tracking is available; page-wide sessions and engagement are not collected.</div>}
+    {metrics.totalPageViews === 0 && <div className="cms-empty" role="status">Website analytics will appear here after the first page visit.</div>}
     <div className="cms-stat-grid">{cards.map(([label, value]) => <article key={label}><strong>{value == null ? '—' : typeof value === 'number' ? value.toLocaleString('en-IN') : value}</strong><span>{label}</span></article>)}</div>
     <div className="cms-analytics-grid">
-      <section className="cms-panel"><h2>First-seen unique article visitors</h2><p className="cms-muted">By first-visit day, India time. Not total page views.</p>
-        {dailyVisitors.length ? <div className="cms-bars" role="img" aria-label="Daily first-seen unique article visitors">{dailyVisitors.map((point) => <div className="cms-bar-column" key={point._id}><strong>{point.visitors}</strong><div className="cms-bar" style={{ height: `${Math.max(4, point.visitors / dailyMax * 100)}%` }} /><small>{point._id.slice(5)}</small></div>)}</div> : <div className="cms-empty">No visitor trend data in this date range.</div>}
+      <section className="cms-panel"><h2>Daily visitors (last 30 days)</h2><p className="cms-muted">Unique first-party browser IDs by day, India time.</p>
+        {dailyVisitors.length ? <div className="cms-bars" role="img" aria-label="Daily website visitors for the last 30 days">{dailyVisitors.map((point) => <div className="cms-bar-column" key={point.day}><strong>{point.visitors}</strong><div className="cms-bar" style={{ height: `${Math.max(4, point.visitors / dailyMax * 100)}%` }} /><small>{point.day.slice(5)}</small></div>)}</div> : <div className="cms-empty">No visitor trend data yet.</div>}
       </section>
       <section className="cms-panel"><h2>Top viewed articles</h2>
         {topArticles.length ? <div className="cms-rank-list">{topArticles.map((article) => <div key={article.articleId}><div><strong>{article.title}</strong><span>{article.category || 'Uncategorized'} · {article.totalViews.toLocaleString('en-IN')} views</span></div><div className="cms-rank-track"><i style={{ width: `${Math.max(3, article.totalViews / topMax * 100)}%` }} /></div></div>)}</div> : <div className="cms-empty">No article view records yet.</div>}
+      </section>
+      <section className="cms-panel"><h2>Most visited pages</h2>
+        {report.charts.topPages.length ? <div className="cms-rank-list">{report.charts.topPages.map((page) => <div key={page.path}><div><strong>{page.title || page.path}</strong><span>{page.path} · {page.pageViews.toLocaleString('en-IN')} views</span></div></div>)}</div> : <div className="cms-empty">No page view records yet.</div>}
       </section>
       <section className="cms-panel"><h2>Views by category</h2>
         {report.charts.viewsByCategory.length ? <div className="cms-rank-list">{report.charts.viewsByCategory.map((item) => <div key={item._id || 'uncategorized'}><div><strong>{item._id || 'Uncategorized'}</strong><span>{item.views.toLocaleString('en-IN')} views</span></div></div>)}</div> : <div className="cms-empty">No category view records yet.</div>}
@@ -3779,6 +3779,111 @@ function AnalyticsAdmin({ token }) {
       </section>
     </div>
     <details className="cms-panel cms-unavailable"><summary>Metrics not collected</summary><p>{report.unavailableMetrics.join(' · ')}</p><small>{report.trackingNote}</small></details>
+  </div>
+}
+
+function CommentAdmin({ token }) {
+  const [status, setStatus] = useState('all')
+  const [page, setPage] = useState(1)
+  const [refresh, setRefresh] = useState(0)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+  const [workingId, setWorkingId] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(`/api/admin/comments?status=${status}&page=${page}&limit=25`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal
+    }).then(async (response) => {
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Comments could not be loaded.')
+      return data
+    }).then((data) => {
+      const lastPage = Math.max(1, data.pagination.pages || 1)
+      if (page > lastPage) {
+        setPage(lastPage)
+        return
+      }
+      setResult(data)
+      setError('')
+    }).catch((loadError) => {
+      if (loadError.name !== 'AbortError') setError(loadError.message)
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false)
+    })
+    const refreshTimer = window.setInterval(() => setRefresh((current) => current + 1), 30000)
+    return () => {
+      controller.abort()
+      window.clearInterval(refreshTimer)
+    }
+  }, [page, refresh, status, token])
+
+  const updateComment = async (entry, method, nextStatus) => {
+    const commentId = String(entry.comment._id)
+    setWorkingId(commentId)
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/admin/comments/${entry.article._id}/${commentId}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        ...(nextStatus ? { body: JSON.stringify({ status: nextStatus }) } : {})
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message || 'Comment could not be updated.')
+      setRefresh((current) => current + 1)
+    } catch (actionError) {
+      setError(actionError.message)
+      setLoading(false)
+    } finally {
+      setWorkingId('')
+    }
+  }
+
+  const counts = result?.counts || { total: 0, pending: 0, approved: 0, rejected: 0 }
+  return <div className="cms-analytics">
+    <div className="cms-panel cms-analytics-toolbar">
+      <div><h2>Comments / Messages</h2><p>Visitor replies are held for moderation before publication. New messages refresh automatically.</p></div>
+      <label>Filter by status<select value={status} onChange={(event) => { setLoading(true); setStatus(event.target.value); setPage(1) }}><option value="all">All messages</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></label>
+    </div>
+    <div className="cms-stat-grid">
+      {[
+        ['Total comments', counts.total],
+        ['Pending', counts.pending],
+        ['Approved', counts.approved],
+        ['Rejected', counts.rejected]
+      ].map(([label, count]) => <article key={label}><strong>{Number(count).toLocaleString('en-IN')}</strong><span>{label}</span></article>)}
+    </div>
+    {error && <div className="cms-panel cms-error" role="alert">{error}</div>}
+    <div className="cms-panel">
+      {loading && !result ? <div className="cms-loading">Loading messages…</div> : <div className="cms-table-wrap"><table className="cms-table"><thead><tr><th>Sender</th><th>Article</th><th>Message</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>{(result?.comments || []).map((entry) => {
+          const comment = entry.comment
+          const busy = workingId === String(comment._id)
+          return <tr key={`${entry.article._id}-${comment._id}`}>
+            <td><strong>{comment.name}</strong><br /><a href={`mailto:${comment.email}`}>{comment.email}</a>{comment.website && <><br /><a href={comment.website} target="_blank" rel="noreferrer">Website</a></>}</td>
+            <td><Link to={`/articles/${comment.articleSlug || entry.article.slug}`}>{comment.articleTitle || entry.article.title}</Link></td>
+            <td className="cms-comment-message">{comment.message}</td>
+            <td>{new Date(comment.createdAt).toLocaleString('en-IN')}</td>
+            <td>{comment.status}</td>
+            <td className="cms-comment-actions">
+              <button className="cms-link" type="button" disabled={busy || comment.status === 'approved'} onClick={() => updateComment(entry, 'PATCH', 'approved')}>Approve</button>
+              <button className="cms-link" type="button" disabled={busy || comment.status === 'rejected'} onClick={() => updateComment(entry, 'PATCH', 'rejected')}>Reject</button>
+              <button className="cms-link" type="button" disabled={busy} onClick={() => {
+                if (window.confirm('Delete this comment permanently?')) updateComment(entry, 'DELETE')
+              }}>Delete</button>
+            </td>
+          </tr>
+        })}</tbody>
+      </table></div>}
+      {!loading && !result?.comments?.length && !error && <div className="cms-empty">No messages found for this filter.</div>}
+      {result?.pagination?.pages > 1 && <div className="cms-pagination"><span>Page {page} of {result.pagination.pages}</span><button className="cms-secondary" type="button" disabled={page <= 1} onClick={() => { setLoading(true); setPage((current) => current - 1) }}>Previous</button><button className="cms-secondary" type="button" disabled={page >= result.pagination.pages} onClick={() => { setLoading(true); setPage((current) => current + 1) }}>Next</button></div>}
+    </div>
   </div>
 }
 
@@ -4021,6 +4126,7 @@ function AdminDashboard() {
   const menu = [
     { key: 'overview', label: 'Dashboard Overview', permission: 'analytics:read' },
     { key: 'analytics', label: 'Analytics / Reports', permission: 'analytics:read' },
+    { key: 'comments', label: 'Comments / Messages', permission: 'comments:read' },
     { key: 'articles', label: 'Article Manager', permission: 'articles:read' },
     { key: 'create-article', label: 'Create New Article', permission: 'articles:write' },
     { key: 'ai-assistant', label: 'AI Content Assistant', permission: 'articles:write' },
@@ -4099,6 +4205,7 @@ function AdminDashboard() {
       <header className="cms-topbar"><div><small>Management Console · {user.role.replace('_', ' ')}</small><h1>{activeMenuItem.label}</h1></div><div className="cms-topbar-actions">{message && <div className="cms-message" role="status">{message}</div>}<button type="button" className="cms-secondary" onClick={logout}>Sign out</button></div></header>
       {active === 'overview' && <>{statistics && <CmsOverview statistics={statistics} />}<AnalyticsAdmin token={token} /></>}
       {active === 'analytics' && <AnalyticsAdmin token={token} />}
+      {active === 'comments' && <CommentAdmin token={token} />}
       {active === 'settings' && <WebsiteSettingsAdmin settings={settings} setSettings={setSettings} saveJson={saveJson} />}
       {active === 'storage' && <StorageAdmin token={token} />}
       {active === 'global' && <GlobalContentAdmin content={content} setContent={setContent} saveJson={saveJson} />}
@@ -4205,6 +4312,7 @@ function AppContent() {
   return (
     <div className={`${isHomeRoute ? 'home-page-shell' : ''}${isCategoryArchiveRoute ? ' category-page-shell' : ''}${isInnerPage ? ' inner-page-shell' : ''}`.trim() || undefined}>
       <GoogleAnalytics />
+      <WebsiteAnalytics />
       <SeoHead />
       {!isAdminRoute && <Header />}
       <main>

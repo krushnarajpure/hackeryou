@@ -3,6 +3,7 @@ const ArticleAnalytics = require('../models/ArticleAnalytics');
 const ArticleVisitor = require('../models/ArticleVisitor');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const { validationResult } = require('express-validator');
 const slugify = require('../utils/slugify');
 const escapeRegex = require('../utils/escapeRegex');
 const { withArticleAnalytics } = require('../utils/articleAnalytics');
@@ -15,6 +16,12 @@ const referencePopularSlugs = [
   'how-to-start-t-shirt-printing-business',
   'the-story-of-ikea-by-marathi-udyojak'
 ];
+
+const withoutPrivateComments = (article) => {
+  const result = article?.toObject ? article.toObject() : { ...article };
+  delete result.comments;
+  return result;
+};
 
 const editableArticleFields = [
   'title', 'slug', 'subtitle', 'content', 'excerpt', 'category', 'additionalCategories', 'authorName', 'sourceUrl', 'image',
@@ -268,30 +275,36 @@ exports.trackArticleView = async (req, res) => {
 };
 
 exports.addArticleComment = async (req, res) => {
+  const body = req.body || {};
+  if (String(body.company || '').trim()) {
+    res.status(201).json({ message: 'टिप्पणी प्राप्त झाली. Admin मंजुरीनंतर प्रकाशित होईल.' });
+    return;
+  }
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) throw Object.assign(new Error(errors.array()[0].msg), { statusCode: 400 });
   const article = await Article.findOne({ slug: req.params.slug, isPublished: true });
   if (!article) throw Object.assign(new Error('Article not found'), { statusCode: 404 });
-  const name = String(req.body.name || '').trim();
-  const message = String(req.body.message || '').trim();
-  if (name.length < 2 || message.length < 10) {
-    throw Object.assign(new Error('Name आणि Comment योग्य भरावे.'), { statusCode: 400 });
-  }
   article.comments.push({
-    name,
-    email: String(req.body.email || '').trim(),
-    website: String(req.body.website || '').trim(),
-    message
+    name: body.name,
+    email: body.email,
+    website: body.website || '',
+    message: body.message,
+    articleTitle: article.title,
+    articleSlug: article.slug,
+    status: 'pending',
+    isApproved: false
   });
   await article.save();
   res.status(201).json({
-    message: 'टिप्पणी सेव झाली.',
-    commentCount: article.comments.filter((comment) => comment.isApproved !== false).length
+    message: 'टिप्पणी प्राप्त झाली. Admin मंजुरीनंतर प्रकाशित होईल.',
+    commentCount: article.comments.filter((comment) => comment.status === 'approved' || (!comment.status && comment.isApproved !== false)).length
   });
 };
 
 exports.getLatestArticles = async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 12, 50);
   const articles = await Article.find({ isPublished: true }).populate('author', 'name').sort({ publicationDate: -1, createdAt: -1 }).limit(limit);
-  res.json({ articles });
+  res.json({ articles: articles.map(withoutPrivateComments) });
 };
 
 exports.getPopularArticles = async (req, res) => {
@@ -314,7 +327,7 @@ exports.getPopularArticles = async (req, res) => {
     articles.push(...recentArticles);
   }
 
-  res.json({ articles });
+  res.json({ articles: articles.map(withoutPrivateComments) });
 };
 
 exports.getRelatedArticles = async (req, res) => {
@@ -336,7 +349,7 @@ exports.getRelatedArticles = async (req, res) => {
       ]
     }).sort({ publicationDate: -1, createdAt: -1 }).limit(limit)
     : [];
-  res.json({ articles });
+  res.json({ articles: articles.map(withoutPrivateComments) });
 };
 
 exports.getHomepage = async (_req, res) => {
@@ -359,7 +372,7 @@ exports.getHomepage = async (_req, res) => {
     }
       articles = await Article.find(filter).sort({ publicationDate: -1, createdAt: -1 }).limit(section.limit);
     }
-    result.push({ key: section.key, title: section.title, subtitle: section.subtitle, categorySlug: section.categorySlug, limit: section.limit, articles });
+    result.push({ key: section.key, title: section.title, subtitle: section.subtitle, categorySlug: section.categorySlug, limit: section.limit, articles: articles.map(withoutPrivateComments) });
   }
   res.json({ sections: result });
 };

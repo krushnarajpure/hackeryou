@@ -8,6 +8,13 @@ per React Router navigation. In GA4 Admin, keep Enhanced Measurement enabled for
 scrolls and outbound clicks, but disable **Page changes based on browser history
 events** to prevent duplicate page views.
 
+## Comments and website analytics
+
+- `POST /api/articles/:slug/comments` validates and rate-limits replies; new replies remain pending until an administrator approves them.
+- `GET /api/admin/comments` lists comments and status counts. `PATCH /api/admin/comments/:articleId/:commentId` approves or rejects a comment; `DELETE` on the same path removes it. These endpoints require an authenticated admin with the corresponding permission.
+- The frontend posts anonymous page views to `POST /api/analytics/pageview`. The backend stores an HMAC of a first-party browser ID and daily aggregates, not raw visitor IDs, IP addresses, or URL query strings.
+- Authenticated administrators with `analytics:read` can view the aggregate visitor and page-view report at `GET /api/analytics/overview`. Counts begin when this tracking is deployed; earlier page-wide history is not available.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

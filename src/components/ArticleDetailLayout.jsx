@@ -99,6 +99,9 @@ export default function ArticleDetailLayout({
                 {commentState.status === 'error' && <p className="comment-error" role="alert">{commentState.message}</p>}
                 <p>Your email address will not be published. Required fields are marked *</p>
                 <form onSubmit={submitComment}>
+                  <label aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+                    Company<input name="company" tabIndex={-1} autoComplete="off" />
+                  </label>
                   <label>Comment *<textarea name="message" required minLength="10" maxLength="2000" rows="6" /></label>
                   <div className="reference-comment-fields">
                     <label>Name *<input name="name" required minLength="2" maxLength="100" /></label>

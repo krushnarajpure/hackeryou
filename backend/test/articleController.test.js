@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const Article = require('../models/Article');
 const ArticleAnalytics = require('../models/ArticleAnalytics');
 const ArticleVisitor = require('../models/ArticleVisitor');
-const { getArticles, getArticleSuggestions, getPopularArticles, getRelatedArticles, trackArticleView } = require('../controllers/articleController');
+const { addArticleComment, getArticles, getArticleSuggestions, getPopularArticles, getRelatedArticles, trackArticleView } = require('../controllers/articleController');
 
 function query(records) {
   return {
@@ -263,4 +263,84 @@ test('article view tracking skips administrative users and detected bots', async
   } finally {
     Article.findOne = originalArticleFindOne;
   }
+});
+
+test('new article comments are saved pending approval with the submitted details', async () => {
+  const originalFindOne = Article.findOne;
+  const comments = [];
+  Article.findOne = async () => ({
+    title: 'Published Article',
+    slug: 'published-article',
+    comments,
+    save: async () => {}
+  });
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(payload) { this.payload = payload; }
+  };
+
+  try {
+    await addArticleComment({
+      params: { slug: 'published-article' },
+      body: {
+        name: 'A User',
+        email: 'user@example.com',
+        website: 'https://example.com',
+        message: 'A sufficiently long comment message.'
+      }
+    }, response);
+  } finally {
+    Article.findOne = originalFindOne;
+  }
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(comments.length, 1);
+  assert.deepEqual(comments[0], {
+    name: 'A User',
+    email: 'user@example.com',
+    website: 'https://example.com',
+    message: 'A sufficiently long comment message.',
+    articleTitle: 'Published Article',
+    articleSlug: 'published-article',
+    status: 'pending',
+    isApproved: false
+  });
+  assert.equal(response.payload.commentCount, 0);
+  assert.match(response.payload.message, / मंजुरीनंतर प्रकाशित होईल/);
+});
+
+test('comment honeypot submissions are acknowledged but never stored', async () => {
+  const originalFindOne = Article.findOne;
+  Article.findOne = () => { throw new Error('Spam must not be stored'); };
+  const response = {
+    status(code) { this.statusCode = code; return this; },
+    json(payload) { this.payload = payload; }
+  };
+
+  try {
+    await addArticleComment({ body: { company: 'spam' } }, response);
+  } finally {
+    Article.findOne = originalFindOne;
+  }
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.payload.commentCount, undefined);
+});
+
+test('public popular article responses do not include commenter information', async () => {
+  const originalFind = Article.find;
+  Article.find = () => query([{
+    slug: '101-low-budget-business-ideas-by-marathi-udyojak',
+    comments: [{ name: 'Private User', email: 'private@example.com', message: 'Private comment' }]
+  }]);
+  const response = { json(payload) { this.payload = payload; } };
+
+  try {
+    await getPopularArticles({ query: { limit: '1' } }, response);
+  } finally {
+    Article.find = originalFind;
+  }
+
+  assert.equal(response.payload.articles.length, 1);
+  assert.equal('comments' in response.payload.articles[0], false);
 });
