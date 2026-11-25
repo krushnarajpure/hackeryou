@@ -11,6 +11,7 @@ import ArticleAuthor, { PUBLIC_AUTHOR_NAME } from './components/ArticleAuthor'
 import ArticleDetailLayout from './components/ArticleDetailLayout'
 import PopularPostsSidebar from './components/PopularPostsSidebar'
 import SeoHead, { SITE_URL } from './components/SeoHead'
+import GoogleAnalytics from './components/GoogleAnalytics'
 import { normalizeWebsiteSettings, useSetWebsiteSettings, useWebsiteSettings } from './context/websiteSettings'
 import { WebsiteSettingsProvider } from './context/WebsiteSettingsContext'
 import DOMPurify from 'dompurify'
@@ -4203,6 +4204,7 @@ function AppContent() {
   }, [settings])
   return (
     <div className={`${isHomeRoute ? 'home-page-shell' : ''}${isCategoryArchiveRoute ? ' category-page-shell' : ''}${isInnerPage ? ' inner-page-shell' : ''}`.trim() || undefined}>
+      <GoogleAnalytics />
       <SeoHead />
       {!isAdminRoute && <Header />}
       <main>

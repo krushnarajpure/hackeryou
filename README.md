@@ -1,5 +1,13 @@
 # React + Vite
 
+## Google Analytics 4
+
+Set `NEXT_PUBLIC_GA_MEASUREMENT_ID` in `.env.local` for local development and in
+the deployment environment for production. The application sends one page view
+per React Router navigation. In GA4 Admin, keep Enhanced Measurement enabled for
+scrolls and outbound clicks, but disable **Page changes based on browser history
+events** to prevent duplicate page views.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      'process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID': JSON.stringify(env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '')
+    },
     server: {
       proxy: {
         '/api': {
